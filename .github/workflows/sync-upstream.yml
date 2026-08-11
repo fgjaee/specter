@@ -1,0 +1,102 @@
+name: Sync Upstream Specter
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '17 */6 * * *'
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: sync-upstream-specter
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out fork
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Fetch upstream
+        id: upstream
+        shell: bash
+        run: |
+          set -euo pipefail
+          git remote remove upstream 2>/dev/null || true
+          git remote add upstream https://github.com/dpejoh/specter.git
+          git fetch --no-tags upstream main
+          git fetch --no-tags origin main
+
+          UPSTREAM_SHA=$(git rev-parse upstream/main)
+          FORK_SHA=$(git rev-parse origin/main)
+          echo "upstream_sha=$UPSTREAM_SHA" >> "$GITHUB_OUTPUT"
+          echo "fork_sha=$FORK_SHA" >> "$GITHUB_OUTPUT"
+
+          if git merge-base --is-ancestor upstream/main origin/main; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            echo "Fork already contains upstream main."
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+            echo "New upstream commits detected."
+          fi
+
+      - name: Merge upstream into sync branch
+        if: steps.upstream.outputs.changed == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          git checkout -B sync/upstream-main origin/main
+          if ! git merge --no-edit upstream/main; then
+            echo "::error::Upstream merge has conflicts. main was not changed."
+            echo "Conflicted files:"
+            git diff --name-only --diff-filter=U || true
+            git merge --abort || true
+            exit 1
+          fi
+
+          # This branch is owned by the workflow; replacing it is intentional.
+          git push --force origin HEAD:sync/upstream-main
+
+      - name: Open or refresh upstream sync PR
+        if: steps.upstream.outputs.changed == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          UPSTREAM_SHA: ${{ steps.upstream.outputs.upstream_sha }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          PR=$(gh pr list \
+            --repo "$GITHUB_REPOSITORY" \
+            --state open \
+            --base main \
+            --head sync/upstream-main \
+            --json number \
+            --jq '.[0].number // empty')
+
+          printf -v BODY 'Automated sync from `dpejoh/specter:main`.\n\nUpstream head: `%s`\n\n%s' \
+            "$UPSTREAM_SHA" \
+            'This PR intentionally merges upstream into this fork instead of replacing the fork branch, so local enhancements remain in history. The normal Specter CI runs on this PR before it is merged.'
+
+          if [ -z "$PR" ]; then
+            gh pr create \
+              --repo "$GITHUB_REPOSITORY" \
+              --base main \
+              --head sync/upstream-main \
+              --title "chore: sync upstream Specter" \
+              --body "$BODY"
+          else
+            gh pr edit "$PR" \
+              --repo "$GITHUB_REPOSITORY" \
+              --title "chore: sync upstream Specter" \
+              --body "$BODY"
+            echo "Updated existing sync PR #$PR"
+          fi
