@@ -22,6 +22,13 @@ const pifBotUrls = (path: string): string[] => [
 ];
 const DEVICE_LIST_URLS = pifBotUrls('bot/device_list.json');
 
+// Keep newer Pixels selectable while the KOWX bot list catches up. The shell
+// fetcher can resolve these products through Canary Miner when KOWX does not
+// yet publish bot/device_prop/<product>.prop.
+const EXTRA_CANARY_DEVICES = [
+  { model: 'Pixel 10 Pro Fold', product: 'rango_beta' },
+] as const;
+
 type PifDevice = { model: string; product: string; imported?: boolean };
 
 function importedDir(): string {
@@ -69,18 +76,23 @@ async function loadPreferred(): Promise<PifDevice[]> {
 let canaryListPromise: Promise<PifDevice[]> | null = null;
 
 async function fetchDeviceListJson(): Promise<PifDevice[]> {
+  let devices: PifDevice[] = [];
   for (const url of DEVICE_LIST_URLS) {
     try {
       const res = await fetch(url, { cache: 'no-cache' });
       if (!res.ok) continue;
       const data: unknown = await res.json();
       if (!Array.isArray(data)) continue;
-      return (data as PifDevice[]).filter(d => d?.model && d?.product);
+      devices = (data as PifDevice[]).filter(d => d?.model && d?.product);
+      break;
     } catch {
       /* try next */
     }
   }
-  return [];
+  for (const extra of EXTRA_CANARY_DEVICES) {
+    if (!devices.some(d => d.product === extra.product)) devices.push({ ...extra });
+  }
+  return devices;
 }
 
 function ensureCanaryList(): Promise<PifDevice[]> {
