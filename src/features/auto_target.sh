@@ -16,6 +16,7 @@ _feature_should_run "target" || { log_d "AUTO_TARGET" "target disabled or claime
 log_i "AUTO_TARGET" "Scanning for new packages"
 
 ksm_available || { log_d "AUTO_TARGET" "no keystore manager, skipping"; exit 0; }
+ksm_target_management_available || { log_i "AUTO_TARGET" "CleveresTricky Global Mode is active; target.txt is inactive, skipping"; exit 0; }
 [ -f "$KSM_TARGETS" ] || { log_w "AUTO_TARGET" "target list missing, skipping"; exit 0; }
 
 pkgs=$(pm list packages -3 2>/dev/null) || { log_e "AUTO_TARGET" "pm list packages failed"; exit 1; }
