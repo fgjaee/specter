@@ -8,7 +8,16 @@ MODDIR=${0%/*}
 log_d "TARGET" "Starting target management"
 
 detect_keystore_manager
-ksm_available || die "No keystore manager (Tricky Store / TEESimulator / OhMyKeymint) data directory found"
+ksm_available || die "No supported keystore manager data directory found"
+
+# CleveresTricky deliberately ignores target.txt while global_mode exists.
+# Keep read-only listing available for diagnostics, but never claim a write is active.
+if ! ksm_target_management_available; then
+  case "${1:-}" in
+    --list|--list-raw) ;;
+    *) die "CleveresTricky Global Mode is enabled; target.txt is inactive. Disable Global Mode in CleveresTricky before using Specter target management." ;;
+  esac
+fi
 
 case "${1:-}" in
   --list)
