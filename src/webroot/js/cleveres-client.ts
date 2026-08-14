@@ -170,6 +170,8 @@ export async function cleveresRequestJson<T>(
 
 export const getCleveresConfig = () => cleveresRequestJson<CleveresConfig>('/api/config');
 export const getCleveresPolicy = () => cleveresRequestJson<CleveresPolicyState>('/api/policy_state');
+export const saveCleveresPolicy = (policy: CleveresPolicyState) =>
+  cleveresRequestJson<CleveresPolicyState>('/api/policy_state', 'POST', { data: JSON.stringify(policy) });
 export const getCleveresFile = (filename: string) => cleveresRequestText('/api/file', 'GET', { filename });
 export const reloadCleveres = () => cleveresRequestText('/api/reload', 'POST');
 export const applyCleveresProfile = (profile: 'default' | 'daily' | 'minimal' | 'maximum') =>
