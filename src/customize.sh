@@ -7,7 +7,7 @@ MODDIR="$MODPATH"
 rm -rf /data/adb/modules/Specter /data/adb/Specter
 
 ui_print ""
-ui_print "____                  _            "
+ui_print " ____                  _            "
 ui_print "/ ___| _ __   ___  ___| |_ ___ _ __ "
 ui_print "\\___ \\| '_ \\ / _ \\/ __| __/ _ \\ '__|"
 ui_print " ___) | |_) |  __/ (__| ||  __/ |   "
@@ -71,18 +71,21 @@ ui_print ""
 
 unset _zygisk_name
 
-# Auto-install TEESimulator-RS only when no keystore backend is present.
-if [ -z "$_ts_name" ] && [ -z "$_teesim_name" ] && [ -z "$_omk_name" ]; then
+ksm_enforce_singleton | while IFS= read -r _ksm_id; do
+  [ -n "$_ksm_id" ] && ui_print "- Disabled $_ksm_id (keystore conflict)"
+done
+
+if ! module_enabled teesim >/dev/null \
+  && ! module_enabled tricky_store >/dev/null \
+  && ! module_enabled "${OMK_MODULE##*/}" >/dev/null; then
   ui_print "- Installing TEESimulator-RS.."
   if install_module_from_github "Enginex0/TEESimulator-RS" "TEESimulator-RS"; then
     ui_print "- TEESimulator-RS installed"
   else
     ui_print "- TEESimulator-RS not available"
   fi
-elif [ -n "$_teesim_name" ]; then
-  ui_print "- TEESimulator detected, skipping TEESimulator-RS"
-elif [ -n "$_omk_name" ]; then
-  ui_print "- OhMyKeymint detected, skipping TEESimulator-RS"
+else
+  ui_print "- Keystore backend present, skipping TEESimulator-RS"
 fi
 unset _ts_name _teesim_name _omk_name
 

@@ -3,11 +3,13 @@
 # Provides refresh_module_description() for boot-time and on-demand use.
 
 refresh_module_description() {
+  ksm_enforce_singleton >/dev/null
+
   detect_keystore_manager
   _problems=""
 
   if [ "$KSM" = "none" ]; then
-    _problems="🚨 No keystore manager installed"
+    _problems="🚨 No keystore manager"
   fi
 
   _cf=""

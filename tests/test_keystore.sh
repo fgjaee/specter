@@ -28,13 +28,6 @@ assert_eq "detect: format toml" "toml" "$KSM_FORMAT"
 
 bootstrap
 source_libs
-mk_module tricky_store "Tricky Store"
-mk_module oh_my_keymint "OhMyKeymint"
-detect_keystore_manager
-assert_eq "detect: both -> trickystore" "trickystore" "$KSM"
-
-bootstrap
-source_libs
 mk_module teesim "TEESimulator"
 mkdir -p "$TEESIM_DIR"
 detect_keystore_manager
@@ -44,18 +37,36 @@ assert_eq "detect: format json" "json" "$KSM_FORMAT"
 bootstrap
 source_libs
 mk_module tricky_store "Tricky Store"
-mk_module teesim "TEESimulator"
-mkdir -p "$TEESIM_DIR"
+mk_module oh_my_keymint "OhMyKeymint"
 detect_keystore_manager
-assert_eq "detect: ts+teesim -> trickystore" "trickystore" "$KSM"
+assert_eq "detect: ts+omk -> trickystore" "trickystore" "$KSM"
 
 bootstrap
 source_libs
+mk_module tricky_store "Tricky Store"
 mk_module teesim "TEESimulator"
 mkdir -p "$TEESIM_DIR"
-set_cfg "keystore_manager" "teesim"
 detect_keystore_manager
-assert_eq "detect: override=teesim" "teesim" "$KSM"
+assert_eq "detect: ts+teesim -> teesim" "teesim" "$KSM"
+
+bootstrap
+source_libs
+mk_module tricky_store "Tricky Store"
+mk_module teesim "TEESimulator"
+mkdir -p "$TEESIM_DIR"
+touch "$MODULES_BASE/teesim/disable"
+detect_keystore_manager
+assert_eq "detect: teesim disabled -> trickystore" "trickystore" "$KSM"
+
+bootstrap
+source_libs
+mk_module tricky_store "Tricky Store"
+mk_module teesim "TEESimulator"
+mkdir -p "$TEESIM_DIR"
+ksm_enforce_singleton >/dev/null
+assert_file_exists "enforce: disables loser" "$MODULES_BASE/tricky_store/disable"
+detect_keystore_manager
+assert_eq "enforce: winner teesim" "teesim" "$KSM"
 
 bootstrap
 source_libs
@@ -64,13 +75,6 @@ mk_module oh_my_keymint "OhMyKeymint"
 set_cfg "keystore_manager" "omk"
 detect_keystore_manager
 assert_eq "detect: override=omk" "omk" "$KSM"
-
-bootstrap
-source_libs
-mk_module oh_my_keymint "OhMyKeymint"
-set_cfg "keystore_manager" "trickystore"
-detect_keystore_manager
-assert_eq "detect: override=trickystore" "trickystore" "$KSM"
 
 bootstrap
 source_libs

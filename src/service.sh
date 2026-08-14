@@ -78,6 +78,9 @@ unset _bf _bf_default
 [ "$(cfg_get toggle_prop_handler 1)" != "0" ] && sh "$MODDIR/features/boot_state_props.sh" >"$SPECTER_DIR/log/boot_state_props.log" 2>&1 || true
 [ "$(cfg_get toggle_boot_hash 1)" != "0" ] && sh "$MODDIR/features/boot_hash.sh" >"$SPECTER_DIR/log/boot_hash.log" 2>&1 || true
 
+# Before keystore_info / first_boot (refresh_module_description enforces again later).
+ksm_enforce_singleton >/dev/null || true
+
 sh "$MODDIR/features/keystore_info.sh" >"$SPECTER_DIR/log/keystore_info.log" 2>&1 || true
 
 log_i "SERVICE" "Boot-time features done"
