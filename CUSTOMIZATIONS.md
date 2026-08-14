@@ -12,8 +12,19 @@ This fork tracks `dpejoh/specter` and intentionally carries a small set of local
 
 This is a **live fetch**, not a frozen imported prop, so future Canary rotations can update automatically.
 
+## CleveresTricky backend support
+
+- Detects the `cleverestricky` module as its own keystore manager instead of pretending it is Tricky Store.
+- Uses CleveresTricky's native data paths under `/data/adb/cleverestricky`: legacy `keybox.xml`, `target.txt`, `security_patch.txt`, and the `global_mode` flag.
+- Auto-selection prefers an enabled CleveresTricky backend over TEESimulator, Tricky Store/TEESimulator-RS, and OhMyKeymint. An explicit `keystore_manager` override can still choose another enabled backend; singleton enforcement disables the other keystore providers to avoid simultaneous hooks.
+- Specter's keybox installer can write the CleveresTricky legacy `keybox.xml` path. CleveresTricky's own multi-keybox/CBOX pool remains owned by CleveresTricky and is not rewritten by Specter.
+- Specter reads and writes CleveresTricky component patch rules. Specter writes full ISO dates for `system`, `vendor`, and `boot`, and can read the legacy compact `YYYYMMDD` form.
+- CleveresTricky ignores `target.txt` while its `global_mode` flag exists. Specter therefore allows read-only target diagnostics but blocks manual target writes and skips Auto Target until Global Mode is disabled in CleveresTricky.
+
 ## Upstream maintenance
 
-`.github/workflows/sync-upstream.yml` checks `dpejoh/specter:main` every six hours and on manual dispatch. When new upstream commits exist it merges them into the dedicated `sync/upstream-main` branch and opens/updates a pull request against this fork's `main`. Existing fork commits remain in the merge history.
+`.github/workflows/sync-upstream.yml` checks `dpejoh/specter:main` every six hours, on manual dispatch, and after local pushes to `main`.
 
-The normal Specter build/test workflow runs on that pull request. Upstream's Telegram upload step is restricted to `dpejoh/specter`, so this fork does not fail because it lacks upstream Telegram secrets.
+When new upstream commits exist, the workflow merges upstream into a temporary local `main`, runs Specter's TypeScript check, ShellCheck, shell tests, TypeScript tests, full build, and module-structure validation, and only then pushes the validated merge to this fork's `main`. Merge conflicts or failed validation leave `main` unchanged.
+
+This avoids relying on GitHub Actions permission to create pull requests from the fork while still preserving local commits in merge history. Upstream's Telegram upload step remains restricted to `dpejoh/specter`, so this fork does not depend on upstream-only secrets.

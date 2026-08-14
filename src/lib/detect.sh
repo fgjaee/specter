@@ -55,6 +55,10 @@ _ts_prop() {
   module_detect "tricky_store"
 }
 
+_cleveres_prop() {
+  module_detect "${CLEVERES_MODULE##*/}"
+}
+
 _omk_prop() {
   module_detect "${OMK_MODULE##*/}" && return 0
 }

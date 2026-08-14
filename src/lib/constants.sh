@@ -31,6 +31,14 @@ FALLBACK_KEYBOXES="Yuri/8"
 : "${GMS_PROPS_FILE:=/data/system/gms_certified_props.json}"
 : "${BACKUP_DIR:=$SPECTER_DIR/backup}"
 
+# -- CleveresTricky (id=cleverestricky) legacy-compatible paths --
+: "${CLEVERES_MODULE:=$MODULES_BASE/cleverestricky}"
+: "${CLEVERES_DIR:=/data/adb/cleverestricky}"
+: "${CLEVERES_KEYBOX:=$CLEVERES_DIR/keybox.xml}"
+: "${CLEVERES_TARGETS:=$CLEVERES_DIR/target.txt}"
+: "${CLEVERES_SECURITY:=$CLEVERES_DIR/security_patch.txt}"
+: "${CLEVERES_GLOBAL_MODE:=$CLEVERES_DIR/global_mode}"
+
 # -- OhMyKeymint (OMK) paths (defaults, overridable by env) --
 : "${OMK_MODULE:=$MODULES_BASE/oh_my_keymint}"
 : "${OMK_DIR:=/data/misc/keystore/omk}"

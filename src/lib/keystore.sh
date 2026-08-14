@@ -1,8 +1,10 @@
 # shellcheck shell=sh
-# Enabled backends only: teesim → Tricky Store / TEESimulator-RS → OMK.
+# Enabled backends only: CleveresTricky → teesim → Tricky Store / TEESimulator-RS → OMK.
 
 _ksm_auto_pick() {
-  if module_enabled teesim >/dev/null; then
+  if module_enabled "${CLEVERES_MODULE##*/}" >/dev/null; then
+    printf '%s\n' cleveres
+  elif module_enabled teesim >/dev/null; then
     printf '%s\n' teesim
   elif module_enabled tricky_store >/dev/null; then
     printf '%s\n' trickystore
@@ -14,6 +16,7 @@ _ksm_auto_pick() {
 ksm_enforce_singleton() {
   _kes_w=""
   case "$(cfg_get keystore_manager auto 2>/dev/null)" in
+    cleveres) module_enabled "${CLEVERES_MODULE##*/}" >/dev/null && _kes_w=cleveres ;;
     teesim) module_enabled teesim >/dev/null && _kes_w=teesim ;;
     trickystore) module_enabled tricky_store >/dev/null && _kes_w=trickystore ;;
     omk) module_enabled "${OMK_MODULE##*/}" >/dev/null && _kes_w=omk ;;
@@ -21,6 +24,11 @@ ksm_enforce_singleton() {
   [ -n "$_kes_w" ] || _kes_w=$(_ksm_auto_pick)
   [ -n "$_kes_w" ] || { unset _kes_w; return 0; }
 
+  if [ "$_kes_w" != cleveres ] && module_enabled "${CLEVERES_MODULE##*/}" >/dev/null; then
+    module_disable "${CLEVERES_MODULE##*/}"
+    printf '%s\n' "${CLEVERES_MODULE##*/}"
+    log_i "KSM" "Disabled ${CLEVERES_MODULE##*/} (keystore conflict; using $_kes_w)"
+  fi
   if [ "$_kes_w" != teesim ] && module_enabled teesim >/dev/null; then
     module_disable teesim
     printf '%s\n' teesim
@@ -42,7 +50,7 @@ ksm_enforce_singleton() {
 detect_keystore_manager() {
   _dkm_override=$(cfg_get keystore_manager auto 2>/dev/null)
   case "$_dkm_override" in
-    trickystore|teesim|omk) KSM=$_dkm_override ;;
+    cleveres|trickystore|teesim|omk) KSM=$_dkm_override ;;
     *)
       KSM=$(_ksm_auto_pick)
       [ -n "$KSM" ] || KSM=none
@@ -50,6 +58,16 @@ detect_keystore_manager() {
   esac
 
   case "$KSM" in
+    cleveres)
+      KSM_NAME=$(_cleveres_prop)
+      [ -n "$KSM_NAME" ] || KSM_NAME="CleveresTricky"
+      KSM_DIR="$CLEVERES_DIR"
+      KSM_KEYBOX="$CLEVERES_KEYBOX"
+      KSM_TARGETS="$CLEVERES_TARGETS"
+      KSM_SECURITY="$CLEVERES_SECURITY"
+      KSM_LOCKED=""
+      KSM_FORMAT="txt"
+      ;;
     trickystore)
       KSM_NAME=$(_ts_prop)
       [ -n "$KSM_NAME" ] || KSM_NAME="Tricky Store"
@@ -96,6 +114,12 @@ detect_keystore_manager() {
 
 ksm_available() {
   [ "$KSM" != "none" ] && [ -n "$KSM_DIR" ] && [ -d "$KSM_DIR" ]
+}
+
+# CleveresTricky ignores target.txt while its global_mode flag exists.
+# Reads are still safe, but Specter must not pretend target writes are active.
+ksm_target_management_available() {
+  [ "$KSM" != "cleveres" ] || [ ! -f "$CLEVERES_GLOBAL_MODE" ]
 }
 
 # Explicit Tools for injector; keymint also auto-touches on trust field saves.
@@ -203,6 +227,11 @@ ksm_get_security_patch() {
       [ -f "$KSM_SECURITY" ] || return 1
       _kgsp=$(grep -E '^boot=' "$KSM_SECURITY" 2>/dev/null | head -1 | cut -d= -f2) || _kgsp=""
       [ -n "$_kgsp" ] || _kgsp=$(grep -E '^all=' "$KSM_SECURITY" 2>/dev/null | head -1 | cut -d= -f2) || _kgsp=""
+      if [ -z "$_kgsp" ]; then
+        _kgsp_compact=$(grep -E '^[0-9]{8}$' "$KSM_SECURITY" 2>/dev/null | head -1) || _kgsp_compact=""
+        [ -n "$_kgsp_compact" ] && _kgsp=$(printf '%s' "$_kgsp_compact" | sed 's/^\(....\)\(..\)\(..\)$/\1-\2-\3/')
+        unset _kgsp_compact
+      fi
       [ -n "$_kgsp" ] || { unset _kgsp; return 1; }
       printf '%s\n' "$_kgsp"
       unset _kgsp
@@ -232,10 +261,16 @@ ksm_set_security_patch() {
           head -1 | cut -d= -f2 | tr -d '[:space:]') || _ksp_vendor=""
       fi
       [ -n "$_ksp_vendor" ] || _ksp_vendor="$_ksp_date"
-      _ksp_yyyymm=$(printf '%s' "$_ksp_date" | cut -d'-' -f1-2 | tr -d '-')
-      printf 'system=%s\nboot=%s\nvendor=%s\n' "$_ksp_yyyymm" "$_ksp_date" "$_ksp_vendor" \
-        > "$KSM_SECURITY" || { unset _ksp_date _ksp_vendor _ksp_yyyymm; return 1; }
-      unset _ksp_vendor _ksp_yyyymm
+      if [ "$KSM" = "cleveres" ]; then
+        printf 'system=%s\nboot=%s\nvendor=%s\n' "$_ksp_date" "$_ksp_date" "$_ksp_vendor" \
+          > "$KSM_SECURITY" || { unset _ksp_date _ksp_vendor; return 1; }
+      else
+        _ksp_yyyymm=$(printf '%s' "$_ksp_date" | cut -d'-' -f1-2 | tr -d '-')
+        printf 'system=%s\nboot=%s\nvendor=%s\n' "$_ksp_yyyymm" "$_ksp_date" "$_ksp_vendor" \
+          > "$KSM_SECURITY" || { unset _ksp_date _ksp_vendor _ksp_yyyymm; return 1; }
+        unset _ksp_yyyymm
+      fi
+      unset _ksp_vendor
       ;;
   esac
   unset _ksp_date
