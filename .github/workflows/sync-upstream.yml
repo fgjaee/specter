@@ -4,10 +4,11 @@ on:
   workflow_dispatch:
   schedule:
     - cron: '17 */6 * * *'
+  push:
+    branches: [main]
 
 permissions:
   contents: write
-  pull-requests: write
 
 concurrency:
   group: sync-upstream-specter
@@ -22,81 +23,94 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Fetch upstream
+      - name: Fetch and merge upstream
         id: upstream
-        shell: bash
-        run: |
-          set -euo pipefail
-          git remote remove upstream 2>/dev/null || true
-          git remote add upstream https://github.com/dpejoh/specter.git
-          git fetch --no-tags upstream main
-          git fetch --no-tags origin main
-
-          UPSTREAM_SHA=$(git rev-parse upstream/main)
-          FORK_SHA=$(git rev-parse origin/main)
-          echo "upstream_sha=$UPSTREAM_SHA" >> "$GITHUB_OUTPUT"
-          echo "fork_sha=$FORK_SHA" >> "$GITHUB_OUTPUT"
-
-          if git merge-base --is-ancestor upstream/main origin/main; then
-            echo "changed=false" >> "$GITHUB_OUTPUT"
-            echo "Fork already contains upstream main."
-          else
-            echo "changed=true" >> "$GITHUB_OUTPUT"
-            echo "New upstream commits detected."
-          fi
-
-      - name: Merge upstream into sync branch
-        if: steps.upstream.outputs.changed == 'true'
         shell: bash
         run: |
           set -euo pipefail
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
-          git checkout -B sync/upstream-main origin/main
+          git remote remove upstream 2>/dev/null || true
+          git remote add upstream https://github.com/dpejoh/specter.git
+          git fetch --no-tags upstream main
+          git fetch --no-tags origin main
+          git checkout -B main origin/main
+
+          UPSTREAM_SHA=$(git rev-parse upstream/main)
+          echo "upstream_sha=$UPSTREAM_SHA" >> "$GITHUB_OUTPUT"
+
+          if git merge-base --is-ancestor upstream/main HEAD; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            echo "Fork already contains upstream main."
+            exit 0
+          fi
+
           if ! git merge --no-edit upstream/main; then
-            echo "::error::Upstream merge has conflicts. main was not changed."
+            echo "::error::Upstream merge has conflicts. Nothing was pushed."
             echo "Conflicted files:"
             git diff --name-only --diff-filter=U || true
             git merge --abort || true
             exit 1
           fi
 
-          # This branch is owned by the workflow; replacing it is intentional.
-          git push --force origin HEAD:sync/upstream-main
+          echo "changed=true" >> "$GITHUB_OUTPUT"
+          echo "Merged upstream $UPSTREAM_SHA locally; validating before push."
 
-      - name: Open or refresh upstream sync PR
+      - name: Setup Node
         if: steps.upstream.outputs.changed == 'true'
-        env:
-          GH_TOKEN: ${{ github.token }}
-          UPSTREAM_SHA: ${{ steps.upstream.outputs.upstream_sha }}
-        shell: bash
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        if: steps.upstream.outputs.changed == 'true'
+        run: npm ci
+
+      - name: Type check
+        if: steps.upstream.outputs.changed == 'true'
+        run: npx tsc --noEmit
+
+      - name: Lint shell scripts
+        if: steps.upstream.outputs.changed == 'true'
+        uses: ludeeus/action-shellcheck@2.0.0
+        with:
+          scandir: src
+          severity: warning
+
+      - name: Run shell tests
+        if: steps.upstream.outputs.changed == 'true'
+        run: bash tests/run.sh
+
+      - name: Run TS tests
+        if: steps.upstream.outputs.changed == 'true'
+        run: npm test
+
+      - name: Build module
+        if: steps.upstream.outputs.changed == 'true'
+        run: npm run build
+
+      - name: Verify module structure
+        if: steps.upstream.outputs.changed == 'true'
+        run: |
+          test -f Module/module.prop
+          test -f Module/META-INF/com/google/android/updater-script
+          test -f Module/webroot/index.html
+          test -f Module/lib/common.sh
+          test -f Module/lib/constants.sh
+          test -f Module/webroot/json/module_paths.json
+
+      - name: Push validated sync to main
+        if: steps.upstream.outputs.changed == 'true'
         run: |
           set -euo pipefail
+          git push origin HEAD:main
 
-          PR=$(gh pr list \
-            --repo "$GITHUB_REPOSITORY" \
-            --state open \
-            --base main \
-            --head sync/upstream-main \
-            --json number \
-            --jq '.[0].number // empty')
-
-          printf -v BODY 'Automated sync from `dpejoh/specter:main`.\n\nUpstream head: `%s`\n\n%s' \
-            "$UPSTREAM_SHA" \
-            'This PR intentionally merges upstream into this fork instead of replacing the fork branch, so local enhancements remain in history. The normal Specter CI runs on this PR before it is merged.'
-
-          if [ -z "$PR" ]; then
-            gh pr create \
-              --repo "$GITHUB_REPOSITORY" \
-              --base main \
-              --head sync/upstream-main \
-              --title "chore: sync upstream Specter" \
-              --body "$BODY"
-          else
-            gh pr edit "$PR" \
-              --repo "$GITHUB_REPOSITORY" \
-              --title "chore: sync upstream Specter" \
-              --body "$BODY"
-            echo "Updated existing sync PR #$PR"
-          fi
+      - name: Upload synced CI module
+        if: steps.upstream.outputs.changed == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: Specter-upstream-sync-${{ steps.upstream.outputs.upstream_sha }}
+          path: Module/
+          retention-days: 28
