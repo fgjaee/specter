@@ -1,23 +1,51 @@
 # shellcheck shell=sh
-# Keystore backends: Tricky Store / TEESimulator-RS (txt), JingMatrix teesim (json), OMK (toml).
-# Call detect_keystore_manager() after common.sh before using KSM_*.
+# Enabled backends only: teesim → Tricky Store / TEESimulator-RS → OMK.
+
+_ksm_auto_pick() {
+  if module_enabled teesim >/dev/null; then
+    printf '%s\n' teesim
+  elif module_enabled tricky_store >/dev/null; then
+    printf '%s\n' trickystore
+  elif module_enabled "${OMK_MODULE##*/}" >/dev/null; then
+    printf '%s\n' omk
+  fi
+}
+
+ksm_enforce_singleton() {
+  _kes_w=""
+  case "$(cfg_get keystore_manager auto 2>/dev/null)" in
+    teesim) module_enabled teesim >/dev/null && _kes_w=teesim ;;
+    trickystore) module_enabled tricky_store >/dev/null && _kes_w=trickystore ;;
+    omk) module_enabled "${OMK_MODULE##*/}" >/dev/null && _kes_w=omk ;;
+  esac
+  [ -n "$_kes_w" ] || _kes_w=$(_ksm_auto_pick)
+  [ -n "$_kes_w" ] || { unset _kes_w; return 0; }
+
+  if [ "$_kes_w" != teesim ] && module_enabled teesim >/dev/null; then
+    module_disable teesim
+    printf '%s\n' teesim
+    log_i "KSM" "Disabled teesim (keystore conflict; using $_kes_w)"
+  fi
+  if [ "$_kes_w" != trickystore ] && module_enabled tricky_store >/dev/null; then
+    module_disable tricky_store
+    printf '%s\n' tricky_store
+    log_i "KSM" "Disabled tricky_store (keystore conflict; using $_kes_w)"
+  fi
+  if [ "$_kes_w" != omk ] && module_enabled "${OMK_MODULE##*/}" >/dev/null; then
+    module_disable "${OMK_MODULE##*/}"
+    printf '%s\n' "${OMK_MODULE##*/}"
+    log_i "KSM" "Disabled ${OMK_MODULE##*/} (keystore conflict; using $_kes_w)"
+  fi
+  unset _kes_w
+}
 
 detect_keystore_manager() {
   _dkm_override=$(cfg_get keystore_manager auto 2>/dev/null)
   case "$_dkm_override" in
-    trickystore) KSM=trickystore ;;
-    teesim) KSM=teesim ;;
-    omk) KSM=omk ;;
+    trickystore|teesim|omk) KSM=$_dkm_override ;;
     *)
-      if [ -n "$(_ts_prop)" ]; then
-        KSM=trickystore
-      elif [ -n "$(_teesim_prop)" ]; then
-        KSM=teesim
-      elif [ -n "$(_omk_prop)" ]; then
-        KSM=omk
-      else
-        KSM=none
-      fi
+      KSM=$(_ksm_auto_pick)
+      [ -n "$KSM" ] || KSM=none
       ;;
   esac
 

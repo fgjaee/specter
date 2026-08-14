@@ -5,9 +5,32 @@ module_detect() {
   for _md_dir in "$MODULES_BASE/$_md_id" "${MODULES_BASE}_update/$_md_id"; do
     [ -f "$_md_dir/module.prop" ] || continue
     grep "^name=" "$_md_dir/module.prop" 2>/dev/null | cut -d= -f2
+    unset _md_id _md_dir
     return 0
   done
+  unset _md_id _md_dir
   return 1
+}
+
+module_enabled() {
+  _me_id="$1"
+  _me_dir="$MODULES_BASE/$_me_id"
+  [ -f "$_me_dir/module.prop" ] || _me_dir="${MODULES_BASE}_update/$_me_id"
+  [ -f "$_me_dir/module.prop" ] || { unset _me_id _me_dir; return 1; }
+  [ -f "$_me_dir/disable" ] && { unset _me_id _me_dir; return 1; }
+  grep "^name=" "$_me_dir/module.prop" 2>/dev/null | cut -d= -f2
+  unset _me_id _me_dir
+  return 0
+}
+
+module_disable() {
+  _mdi_id="$1"
+  for _mdi_dir in "$MODULES_BASE/$_mdi_id" "${MODULES_BASE}_update/$_mdi_id"; do
+    [ -f "$_mdi_dir/module.prop" ] || continue
+    [ -f "$_mdi_dir/disable" ] && continue
+    touch "$_mdi_dir/disable" 2>/dev/null || true
+  done
+  unset _mdi_id _mdi_dir
 }
 
 install_module_from_github() {
