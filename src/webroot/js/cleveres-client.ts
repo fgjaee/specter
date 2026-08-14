@@ -173,6 +173,8 @@ export const getCleveresPolicy = () => cleveresRequestJson<CleveresPolicyState>(
 export const saveCleveresPolicy = (policy: CleveresPolicyState) =>
   cleveresRequestJson<CleveresPolicyState>('/api/policy_state', 'POST', { data: JSON.stringify(policy) });
 export const getCleveresFile = (filename: string) => cleveresRequestText('/api/file', 'GET', { filename });
+export const saveCleveresFile = (filename: string, content: string) =>
+  cleveresRequestText('/api/save', 'POST', { filename, content });
 export const reloadCleveres = () => cleveresRequestText('/api/reload', 'POST');
 export const applyCleveresProfile = (profile: 'default' | 'daily' | 'minimal' | 'maximum') =>
   cleveresRequestText('/api/apply_profile', 'POST', { profile });
