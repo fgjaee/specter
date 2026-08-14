@@ -67,7 +67,11 @@ _append_missing() {
   _am_base=$(_normalize_pkg "$_am_line")
   [ -z "$_am_base" ] && { unset _am_line _am_base; return 0; }
   if ! grep -Fxq "$_am_base" "$_TMP_EXIST" 2>/dev/null; then
-    printf '%s\n' "$_am_line" >> "$_TMP_TARGET"
+    if [ "$KSM" = "cleveres" ]; then
+      printf '%s\n' "$_am_base" >> "$_TMP_TARGET"
+    else
+      printf '%s\n' "$_am_line" >> "$_TMP_TARGET"
+    fi
     printf '%s\n' "$_am_base" >> "$_TMP_EXIST"
     _added=$((_added + 1))
   fi
@@ -76,10 +80,12 @@ _append_missing() {
 }
 
 # Compute suffix for a given package based on customize.txt and TEE status
-# Sets $_suffix and $_custom_matched
+# Sets $_suffix and $_custom_matched. CleveresTricky's current target parser
+# is package-scope only; do not emit Tricky Store's !/? policy suffixes there.
 _compute_suffix() {
   _pkg="$1"
   _suffix="" _custom_matched=false
+  [ "$KSM" = "cleveres" ] && return 0
   if [ "$_customize_mode" = "selective" ]; then
     _match=$(grep -E "^${_pkg}[!?]?$" "$_customize" 2>/dev/null | head -1)
     if [ -n "$_match" ]; then
