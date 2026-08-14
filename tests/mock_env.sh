@@ -15,6 +15,12 @@ bootstrap() {
   TRICKY_DIR="$TEST_ROOT/tricky_store"
   MODDIR="$TEST_ROOT"
   MODULES_BASE="$TEST_ROOT/modules"
+  CLEVERES_MODULE="$MODULES_BASE/cleverestricky"
+  CLEVERES_DIR="$TEST_ROOT/cleverestricky"
+  CLEVERES_KEYBOX="$CLEVERES_DIR/keybox.xml"
+  CLEVERES_TARGETS="$CLEVERES_DIR/target.txt"
+  CLEVERES_SECURITY="$CLEVERES_DIR/security_patch.txt"
+  CLEVERES_GLOBAL_MODE="$CLEVERES_DIR/global_mode"
   OMK_MODULE="$MODULES_BASE/oh_my_keymint"
   OMK_DIR="$TEST_ROOT/omk"
   OMK_KEYBOX="$OMK_DIR/keybox.xml"
@@ -26,7 +32,8 @@ bootstrap() {
   TEESIM_KEYBOX="$TEESIM_DIR/keybox.xml"
   mkdir -p "$PROPS_DIR" "$LOGS_DIR" "$BIN_DIR" "$CONFIG_DIR/val" "$SPECTER_DIR" "$TRICKY_DIR" "$MODULES_BASE"
   export MOCK_DIR PROPS_DIR LOGS_DIR BIN_DIR CONFIG_DIR SPECTER_DIR TRICKY_DIR MODDIR
-  export MODULES_BASE OMK_MODULE OMK_DIR OMK_KEYBOX OMK_INJECTOR OMK_CONFIG OMK_RESTART_DIR
+  export MODULES_BASE CLEVERES_MODULE CLEVERES_DIR CLEVERES_KEYBOX CLEVERES_TARGETS CLEVERES_SECURITY CLEVERES_GLOBAL_MODE
+  export OMK_MODULE OMK_DIR OMK_KEYBOX OMK_INJECTOR OMK_CONFIG OMK_RESTART_DIR
   export TEESIM_DIR TEESIM_CONFIG TEESIM_KEYBOX
 
   cat > "$BIN_DIR/resetprop" << 'MOCK'
@@ -100,7 +107,7 @@ source_libs() {
   TEE_STATUS="$SPECTER_DIR/tee_status"
   TEE_BHASH="$SPECTER_DIR/tee_hash"
   # constants.sh only sets these on first use (:=), so re-derive them from
-  # the current TRICKY_DIR/OMK_DIR on every call — otherwise they stick to
+  # the current backend dirs on every call — otherwise they stick to
   # whichever TEST_ROOT was active the first time source_libs ran.
   TARGET_FILE="$TRICKY_DIR/keybox.xml"
   BACKUP_FILE="$SPECTER_DIR/backup/keybox.xml.bak"
@@ -109,6 +116,12 @@ source_libs() {
   TARGET_TXT="$TRICKY_DIR/target.txt"
   SECURITY_PATCH_FILE="$TRICKY_DIR/security_patch.txt"
   BACKUP_DIR="$SPECTER_DIR/backup"
+  CLEVERES_MODULE="$MODULES_BASE/cleverestricky"
+  CLEVERES_DIR="$TEST_ROOT/cleverestricky"
+  CLEVERES_KEYBOX="$CLEVERES_DIR/keybox.xml"
+  CLEVERES_TARGETS="$CLEVERES_DIR/target.txt"
+  CLEVERES_SECURITY="$CLEVERES_DIR/security_patch.txt"
+  CLEVERES_GLOBAL_MODE="$CLEVERES_DIR/global_mode"
   OMK_KEYBOX="$OMK_DIR/keybox.xml"
   OMK_INJECTOR="$OMK_DIR/injector.toml"
   OMK_CONFIG="$OMK_DIR/config.toml"
@@ -127,7 +140,8 @@ mk_module() {
 
 run_feature() {
   _feature="$1"; shift
-  PATH="$BIN_DIR:/usr/bin:/bin" MODDIR="$TEST_ROOT" SPECTER_DIR="$SPECTER_DIR" CONFIG_DIR="$CONFIG_DIR" TRICKY_DIR="$TRICKY_DIR" sh "$REPO_ROOT/src/features/$_feature" "$@" 2>&1
+  PATH="$BIN_DIR:/usr/bin:/bin" MODDIR="$TEST_ROOT" SPECTER_DIR="$SPECTER_DIR" CONFIG_DIR="$CONFIG_DIR" TRICKY_DIR="$TRICKY_DIR" \
+    CLEVERES_DIR="$CLEVERES_DIR" CLEVERES_MODULE="$CLEVERES_MODULE" sh "$REPO_ROOT/src/features/$_feature" "$@" 2>&1
 }
 
 source_feature() {
