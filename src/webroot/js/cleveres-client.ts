@@ -46,6 +46,12 @@ export interface CleveresPolicyState {
   [key: string]: unknown;
 }
 
+export interface CleveresExecResult {
+  errno: number;
+  stdout: string;
+  stderr: string;
+}
+
 const BRIDGE_PATHS = [
   '/data/adb/modules/cleverestricky/webui_bridge',
   '/data/adb/ksu/modules/cleverestricky/webui_bridge',
@@ -53,6 +59,7 @@ const BRIDGE_PATHS = [
 ] as const;
 
 const MAX_BODY_BYTES = 20 * 1024 * 1024;
+const MAX_ENVELOPE_CHARS = 1024 * 1024;
 
 function bytesToBinary(bytes: Uint8Array): string {
   let binary = '';
@@ -110,6 +117,135 @@ function bridgeShellCommand(encodedRequest: string, timeoutMs: number): string {
     + `exec "$CT_BRIDGE" call '${encodedRequest}' '${timeoutMs}'`;
 }
 
+function looksLikeEnvelope(value: unknown): value is CleveresEnvelope {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+  const e = value as Partial<CleveresEnvelope>;
+  if (e.version !== 1 || !Number.isInteger(e.status) || (e.status as number) < 100 || (e.status as number) > 599) return false;
+  if (typeof e.statusText !== 'string' || typeof e.mimeType !== 'string') return false;
+  if (!Number.isSafeInteger(e.size) || (e.size as number) < 0 || (e.size as number) > MAX_BODY_BYTES) return false;
+  const hasBody = typeof e.body === 'string';
+  const hasDownload = typeof e.downloadId === 'string';
+  if (hasBody === hasDownload) return false;
+  if (hasBody && !/^[A-Za-z0-9_-]*$/.test(e.body!)) return false;
+  if (hasDownload && !/^[0-9a-f]{32}$/.test(e.downloadId!)) return false;
+  return true;
+}
+
+/**
+ * KernelSU/APatch WebUI bridges do not all use the callback arguments the same
+ * way. CleveresTricky's own WebUI therefore scans stdout, errno, and stderr for
+ * a valid native response envelope before interpreting an exit code. Specter
+ * must do the same or a perfectly valid HTTP-200 envelope can be mistaken for
+ * a shell error and displayed to the user verbatim.
+ */
+export function extractCleveresEnvelope(value: unknown, depth = 0): string | null {
+  if (value === null || value === undefined || depth > 4) return null;
+  if (typeof value === 'string') {
+    const raw = value.trim();
+    if (!raw || raw.length > MAX_ENVELOPE_CHARS) return null;
+    try {
+      return extractCleveresEnvelope(JSON.parse(raw), depth + 1);
+    } catch {
+      return null;
+    }
+  }
+  if (typeof value !== 'object' || Array.isArray(value)) return null;
+  if (looksLikeEnvelope(value)) return JSON.stringify(value);
+  const wrapper = value as Record<string, unknown>;
+  for (const key of ['stdout', 'out', 'stderr', 'err', 'message', 'result', 'data', 'output']) {
+    if (!(key in wrapper)) continue;
+    const envelope = extractCleveresEnvelope(wrapper[key], depth + 1);
+    if (envelope) return envelope;
+  }
+  return null;
+}
+
+export function normalizeCleveresExecValues(values: unknown[]): CleveresExecResult {
+  // Match CleveresTricky's own WebUI: a valid response envelope wins regardless
+  // of which callback slot the host put it in.
+  for (const value of [values[1], values[0], values[2]]) {
+    const envelope = extractCleveresEnvelope(value);
+    if (envelope) return { errno: 0, stdout: envelope, stderr: '' };
+  }
+
+  let errno: unknown = values[0];
+  let stdout: unknown = values[1];
+  let stderr: unknown = values[2];
+
+  if (values.length === 1 && errno && typeof errno === 'object' && !Array.isArray(errno)) {
+    const result = errno as Record<string, unknown>;
+    if ('errno' in result || 'stdout' in result || 'stderr' in result || 'code' in result || 'out' in result || 'err' in result) {
+      errno = result.errno ?? result.code ?? 0;
+      stdout = result.stdout ?? result.out ?? '';
+      stderr = result.stderr ?? result.err ?? '';
+    } else {
+      errno = -1;
+      stdout = '';
+      stderr = 'Unsupported native exec result';
+    }
+  } else if (values.length === 1 && typeof errno === 'string') {
+    const raw = errno.trim();
+    let parsed: Record<string, unknown> | null = null;
+    try {
+      const candidate = JSON.parse(raw) as unknown;
+      if (candidate && typeof candidate === 'object' && !Array.isArray(candidate)) parsed = candidate as Record<string, unknown>;
+    } catch {}
+    if (parsed && ('errno' in parsed || 'stdout' in parsed || 'stderr' in parsed || 'code' in parsed)) {
+      errno = parsed.errno ?? parsed.code ?? 0;
+      stdout = parsed.stdout ?? parsed.out ?? '';
+      stderr = parsed.stderr ?? parsed.err ?? '';
+    } else {
+      errno = 0;
+      stdout = raw;
+      stderr = '';
+    }
+  }
+
+  const numericErrno = Number(errno);
+  return {
+    errno: Number.isFinite(numericErrno) ? numericErrno : -1,
+    stdout: String(stdout ?? '').trim(),
+    stderr: String(stderr ?? '').trim(),
+  };
+}
+
+function execCleveresNative(command: string, timeoutMs: number): Promise<string> {
+  const nativeApi = window.ksu;
+  if (!nativeApi?.exec) return Promise.reject(new Error('KernelSU/APatch WebUI bridge is unavailable'));
+  const boundedTimeout = Math.min(Math.max(Math.trunc(timeoutMs), 1000), 120000);
+
+  return new Promise((resolve, reject) => {
+    const callbackName = `__sp_ct_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
+    let settled = false;
+    const cleanup = () => { delete (globalThis as Record<string, unknown>)[callbackName]; };
+    const timer = setTimeout(() => {
+      if (settled) return;
+      settled = true;
+      cleanup();
+      reject(new Error('CleveresTricky native bridge timed out'));
+    }, boundedTimeout + 5000);
+
+    (globalThis as Record<string, unknown>)[callbackName] = (...values: unknown[]) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      cleanup();
+      const result = normalizeCleveresExecValues(values);
+      if (result.errno === 0) resolve(result.stdout);
+      else reject(new Error(result.stderr || result.stdout || `CleveresTricky native bridge failed with code ${result.errno}`));
+    };
+
+    try {
+      nativeApi.exec(command, '{}', callbackName);
+    } catch (error) {
+      settled = true;
+      clearTimeout(timer);
+      cleanup();
+      reject(error);
+    }
+  });
+}
+
 export async function cleveresAvailable(): Promise<boolean> {
   const tests = BRIDGE_PATHS.map(path => `[ -x '${path}' ]`).join(' || ');
   try {
@@ -128,23 +264,15 @@ export async function cleveresRequestText(
 ): Promise<string> {
   const boundedTimeout = Math.min(Math.max(Math.trunc(timeoutMs), 1000), 120000);
   const request = buildCleveresRequest(path, method, parameters);
-  const result = await exec(bridgeShellCommand(encodeCleveresText(request), boundedTimeout));
-  if (typeof result.code === 'number' && result.code !== 0) {
-    throw new Error((result.stderr || result.stdout || 'CleveresTricky request failed').trim());
-  }
+  const raw = await execCleveresNative(bridgeShellCommand(encodeCleveresText(request), boundedTimeout), boundedTimeout);
 
   let envelope: CleveresEnvelope;
   try {
-    envelope = JSON.parse((result.stdout || '').trim()) as CleveresEnvelope;
+    envelope = JSON.parse(raw.trim()) as CleveresEnvelope;
   } catch {
     throw new Error('Invalid response from CleveresTricky');
   }
-  if (envelope.version !== 1 || !Number.isInteger(envelope.status) || envelope.status < 100 || envelope.status > 599) {
-    throw new Error('Invalid CleveresTricky response envelope');
-  }
-  if (!Number.isSafeInteger(envelope.size) || envelope.size < 0 || envelope.size > MAX_BODY_BYTES) {
-    throw new Error('Invalid CleveresTricky response size');
-  }
+  if (!looksLikeEnvelope(envelope)) throw new Error('Invalid CleveresTricky response envelope');
   if (typeof envelope.body !== 'string') {
     throw new Error(envelope.downloadId ? 'CleveresTricky returned a downloadable response' : 'CleveresTricky response body is missing');
   }
