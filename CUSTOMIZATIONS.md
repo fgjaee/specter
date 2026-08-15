@@ -55,6 +55,16 @@ A separate **Restart RCS apps** action only force-stops Google Messages and Goog
 
 The RCS mode is a controlled diagnostic for cases where RCS security eligibility fails while Play Integrity still passes. It tests whether CleveresTricky interception of the RCS-side applications is part of the failure; it does not alter the PIF fingerprint and does not guarantee a server-side RCS verdict.
 
+## Smart hot install
+
+KernelSU-family updates are classified before Specter replaces the live module:
+
+- **UI/metadata only** (`webroot`, module metadata, installer metadata): the staged files replace the live copy immediately. No scheduler restart, PIF fetch, target write, security-patch write, keybox action, Google service restart, or integrity pipeline is run.
+- **Runtime update** (features, libraries, scheduler/action/helper code): the live files are replaced and Specter restarts its scheduler plus refreshes read-only WebUI status files. The full `action.sh` integrity pipeline is deliberately not run.
+- **Boot/root-sensitive update** (`post-fs-data.sh`, `service.sh`, system/sepolicy/native/zygisk-style paths): the update stays in KernelSU's staging directory and Specter explicitly requires a reboot rather than falsely claiming a live apply.
+
+This makes rapid WebUI/CI testing safe: ordinary UI fixes can be flashed and reopened immediately without perturbing a working Play Integrity/RCS test state.
+
 ## Upstream maintenance
 
 `.github/workflows/sync-upstream.yml` checks `dpejoh/specter:main` every six hours, on manual dispatch, and after local pushes to `main`.
