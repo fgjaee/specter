@@ -5,6 +5,7 @@ _hi_setup() {
   # hot-install classification needs the real filesystem find/cmp/readlink.
   PATH="/usr/bin:/bin:$BIN_DIR"
   export PATH
+  unset _specter_hot_done
 
   _modid="${1:-specter}"
   ROOT_SOL="kernelsu"
