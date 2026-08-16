@@ -27,6 +27,14 @@ else
   ui_print "- Zygisk: none"
 fi
 
+# CleveresTricky
+_cleveres_name=$(_cleveres_prop)
+if [ -n "$_cleveres_name" ]; then
+  ui_print "- $_cleveres_name"
+else
+  ui_print "- CleveresTricky: none"
+fi
+
 # Tricky Store / TEESimulator-RS (id=tricky_store)
 _ts_name=$(_ts_prop)
 if [ -n "$_ts_name" ]; then
@@ -67,7 +75,8 @@ ksm_enforce_singleton | while IFS= read -r _ksm_id; do
   [ -n "$_ksm_id" ] && ui_print "- Disabled $_ksm_id (keystore conflict)"
 done
 
-if ! module_enabled teesim >/dev/null \
+if ! module_enabled "${CLEVERES_MODULE##*/}" >/dev/null \
+  && ! module_enabled teesim >/dev/null \
   && ! module_enabled tricky_store >/dev/null \
   && ! module_enabled "${OMK_MODULE##*/}" >/dev/null; then
   ui_print "- Installing TEESimulator-RS.."
@@ -79,7 +88,7 @@ if ! module_enabled teesim >/dev/null \
 else
   ui_print "- Keystore backend present, skipping TEESimulator-RS"
 fi
-unset _ts_name _teesim_name _omk_name
+unset _cleveres_name _ts_name _teesim_name _omk_name
 
 # Mark first-boot setup as pending (runs once after reboot in service.sh)
 mkdir -p "$SPECTER_DIR"
