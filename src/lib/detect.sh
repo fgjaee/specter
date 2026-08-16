@@ -51,6 +51,10 @@ _zygisk_variant() {
   echo ""
 }
 
+_cleveres_prop() {
+  module_detect "cleverestricky"
+}
+
 _ts_prop() {
   module_detect "tricky_store"
 }
@@ -62,4 +66,3 @@ _omk_prop() {
 _teesim_prop() {
   module_detect "teesim"
 }
-
