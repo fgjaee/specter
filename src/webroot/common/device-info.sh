@@ -26,23 +26,6 @@ _patch_date=$(ksm_get_security_patch 2>/dev/null) || _patch_date=""
 # Flags
 _twrp="false"; [ -f "$SPECTER_DIR/twrp" ] && _twrp="true"
 _blacklist="false"; [ -f "$SPECTER_DIR/blacklist_enabled" ] && _blacklist="true"
-# TEE status, read cached result from Specter dir
-_tee_status="unknown"
-_tee_tier=""
-if [ -f "$TEE_STATUS" ]; then
-  _tee_val=$(grep -E '^tee(broken|_broken)=' "$TEE_STATUS" | cut -d= -f2 2>/dev/null || echo "")
-  case "$_tee_val" in
-    true)  _tee_status="broken" ;;
-    false) _tee_status="normal" ;;
-  esac
-  unset _tee_val
-fi
-if [ -f "$TEE_TIER" ]; then
-  _tee_tier=$(cat "$TEE_TIER" | tr -d ' \n')
-  [ -z "$_tee_tier" ] && _tee_tier="null"
-else
-  _tee_tier="null"
-fi
 
 _pif_model=""
 if _pif_prop >/dev/null 2>&1; then
@@ -84,8 +67,6 @@ cat <<EOF > "$INFO_PATH"
   "root": "$_root_type",
   "root_sol": "$ROOT_SOL",
   "version": "$_version",
-  "tee_status": "$_tee_status",
-  "tee_tier": $_tee_tier,
   "security_patch": "$_patch_date",
   "build_patch": "$_build_patch",
   "pif_model": "$(_escape_json "$_pif_model")",
@@ -95,4 +76,4 @@ cat <<EOF > "$INFO_PATH"
   }
 }
 EOF
-unset _android_ver _kernel_ver _root_type _version _tee_status _tee_tier _build_patch _patch_date _pif_model _twrp _blacklist
+unset _android_ver _kernel_ver _root_type _version _build_patch _patch_date _pif_model _twrp _blacklist

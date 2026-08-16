@@ -74,8 +74,6 @@ document.addEventListener('DOMContentLoaded', async () => {
   import('./gms-ui.js').then(m => m.wireGms()).catch(() => {});
   import('./action-security-patch-ui.js').then(m => m.wireActionSecurityPatch()).catch(() => {});
   import('./security-patch-ui.js').then(m => m.wireSecurityPatch()).catch(() => {});
-  import('./boot-hash-ui.js').then(m => m.wireBootHash()).catch(() => {});
-  import('./tee-bhash-ui.js').then(m => m.wireTeeHash()).catch(() => {});
   import('./omk-trust-ui.js').then(m => m.wireOmkTrust()).catch(() => {});
   import('./cleveres-ui.js').then(m => m.wireCleveresTricky()).catch(() => {});
   import('./font.js').then(m => m.wireFontToggles()).catch(() => {});
@@ -115,6 +113,15 @@ async function wireConflictToggles() {
   const desc = document.getElementById('conflicts-desc');
   const container = document.getElementById('conflicts-container');
   if (!title || !desc || !container) return;
+
+  // Module-owned features get their Specter controls hidden (see applyOwnership).
+  const entries = data.map(m => ({ key: m.key, prioritySpecter: m.prioritySpecter }));
+  const applyOwnership = () => {
+    const te = entries.find(e => e.key === 'teesim');
+    const moduleOwns = te ? !te.prioritySpecter : false;
+    document.getElementById('security-patch-btn')?.toggleAttribute('hidden', moduleOwns);
+    document.getElementById('toggle-action_security_patch')?.toggleAttribute('hidden', moduleOwns);
+  };
 
   title.style.display = '';
   desc.style.display = '';
@@ -172,6 +179,10 @@ async function wireConflictToggles() {
         const result = await exec(cmd);
         if (typeof result.code === 'number' && result.code !== 0) throw new Error(result.stderr || 'Failed to update');
 
+        const entry = entries.find(e => e.key === mod.key);
+        if (entry) entry.prioritySpecter = !isModule;
+        applyOwnership();
+
         const prettyFeatures = mod.features
           ? [...new Set(mod.features.split(',').map(f => f.trim()).map(f => {
               const key = FEATURE_I18N_KEYS[f];
@@ -187,4 +198,6 @@ async function wireConflictToggles() {
       } finally { sw.disabled = false; }
     });
   }
+
+  applyOwnership();
 }

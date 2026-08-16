@@ -3,7 +3,6 @@ import { runScript } from './bridge.js';
 import { appendToOutput } from './terminal.js';
 import { API_URLS } from './constants.js';
 import { getTranslation } from './i18n.js';
-const t = (key: string, fallback: string): string => getTranslation(key) || fallback;
 import type { InfoJson, KeyboxInfoJson, KeystoreManagerJson } from './types.js';
 
 export async function initDevice() {
@@ -69,10 +68,13 @@ function applyKeystoreManager(data: KeystoreManagerJson) {
     const el = document.getElementById(id);
     if (el) el.hidden = !show;
   }
+  const backendEl = document.getElementById('sp-backend');
+  if (backendEl) {
+    backendEl.textContent = data.name || (data.id && data.id !== 'none' ? data.id : (getTranslation('device_not_installed') || 'Not Installed'));
+  }
 }
 
 function applyAllDeviceInfo(data: InfoJson) {
-  applyTeeStatus(data);
   applySecurityPatch(data);
 }
 
@@ -132,26 +134,6 @@ function applySecurityPatch(data: InfoJson) {
   if (!dateEl) return;
   dateEl.textContent = data.security_patch || data.build_patch || '—';
   if (pifEl) pifEl.textContent = data.pif_model || '—';
-}
-
-function applyTeeStatus(data: InfoJson) {
-  const spTee = document.getElementById('sp-tee');
-  const status = data.tee_status || '';
-  const tier = data.tee_tier;
-  let label = status === 'broken' ? t('tee_broken', 'Broken') : status === 'normal' ? t('tee_normal', 'Normal') : '—';
-  if (status === 'normal' && tier !== undefined) {
-    const tierName = tier === 2 ? t('tee_tier_strongbox', 'StrongBox')
-      : tier === 1 ? t('tee_tier_tee', 'TEE')
-      : tier === 0 ? t('tee_tier_software', 'Software')
-      : '';
-    if (tierName) label += ` (${tierName})`;
-  }
-  if (spTee) {
-    spTee.textContent = label;
-    spTee.className = 'sp-hero-tee';
-    if (status === 'broken') spTee.classList.add('sp-hero-tee--broken');
-    else if (status === 'normal') spTee.classList.add('sp-hero-tee--normal');
-  }
 }
 
 interface ConflictModule {

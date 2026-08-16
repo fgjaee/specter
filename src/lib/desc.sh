@@ -41,7 +41,7 @@ refresh_module_description() {
     fi
     [ -z "$_patch" ] && _patch="-"
 
-    if [ -f "$KSM_KEYBOX" ] || [ -f "$KSM_LOCKED" ]; then
+    if [ -f "$KSM_KEYBOX" ]; then
       _title="$_kb_src${_kb_ver:+ $_kb_ver}"
       if [ -n "$_kb_rev" ]; then
         _new_desc="🔑 $_title · ❌ | $_apps apps | 🛡️ $_patch"

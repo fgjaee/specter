@@ -42,13 +42,6 @@ sp_persist() {
   unset _sp_name _sp_value _sp_original
 }
 
-apply_vbmeta_props() {
-  resetprop ro.boot.vbmeta.avb_version >/dev/null 2>&1 || { resetprop -n ro.boot.vbmeta.avb_version "1.3" && log_i "PROPS" "ro.boot.vbmeta.avb_version → 1.3"; }
-  resetprop ro.boot.vbmeta.hash_alg >/dev/null 2>&1 || { resetprop -n ro.boot.vbmeta.hash_alg "sha256" && log_i "PROPS" "ro.boot.vbmeta.hash_alg → sha256"; }
-  resetprop ro.boot.vbmeta.invalidate_on_error >/dev/null 2>&1 || { resetprop -n ro.boot.vbmeta.invalidate_on_error "yes" && log_i "PROPS" "ro.boot.vbmeta.invalidate_on_error → yes"; }
-  resetprop ro.boot.vbmeta.size >/dev/null 2>&1 || { resetprop -n ro.boot.vbmeta.size "4096" && log_i "PROPS" "ro.boot.vbmeta.size → 4096"; }
-}
-
 apply_boot_props() {
   for _abp_prop in \
     ro.build.selinux:1 ro.build.selinux.enforce:1 \

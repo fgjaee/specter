@@ -7,7 +7,7 @@ const t = (key: string, fallback: string): string => getTranslation(key) || fall
 export function openActionSecurityPatchDialog() {
   const dialog = document.createElement('md-dialog');
 
-  cfgGet('toggle_action_security_patch', '1').then(parent => {
+  cfgGet('toggle_action_security_patch', '0').then(parent => {
     const enabled = parent !== '0';
     Promise.all([
       cfgGet('toggle_action_security_patch_device', '1'),

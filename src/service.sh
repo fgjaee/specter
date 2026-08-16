@@ -47,7 +47,6 @@ unset _pair _old _new
 
 # Seed default configs before running any features
 for _tk_pair in toggle_prop_handler:1 toggle_boot_state_props:1 toggle_bootmode_spoof:1 \
-                toggle_vbmeta_props:1 toggle_boot_hash:1 \
                 toggle_adb_disabler:0 \
                 toggle_adb_disabler_dev_options:1 toggle_adb_disabler_usb_debug:1 \
                 toggle_adb_disabler_oem_unlock:1 \
@@ -56,7 +55,7 @@ for _tk_pair in toggle_prop_handler:1 toggle_boot_state_props:1 toggle_bootmode_
                 toggle_rom_fingerprint_names:1 toggle_rom_fingerprint_prefix:1 \
                 toggle_rom_fingerprint_build_type:1 \
                 toggle_action_gms:1 toggle_action_target:1 \
-                toggle_action_security_patch:1 toggle_action_pif:1 toggle_action_keybox:1 \
+                toggle_action_security_patch:0 toggle_action_pif:1 toggle_action_keybox:1 \
                 toggle_action_security_patch_device:1 toggle_action_security_patch_bulletin:1 \
                 toggle_action_security_patch_synthetic:1 \
                 toggle_action_gms_force_stop:1 toggle_action_gms_clear_data:1 \
@@ -66,7 +65,7 @@ for _tk_pair in toggle_prop_handler:1 toggle_boot_state_props:1 toggle_bootmode_
   [ -f "$CONFIG_DIR/val/$_key.val" ] || cfg_set "$_key" "$_def"
 done
 
-for _bf in adb_disabler rom_fingerprint tee pif_props crom_props; do
+for _bf in adb_disabler rom_fingerprint pif_props crom_props; do
   case "$_bf" in *[!a-zA-Z0-9_-]*) log_w "SERVICE" "Skipping invalid feature: $_bf"; continue ;; esac
   _bf_default=1
   case "$_bf" in adb_disabler|rom_fingerprint) _bf_default=0 ;; esac
@@ -76,7 +75,6 @@ done
 unset _bf _bf_default
 
 [ "$(cfg_get toggle_prop_handler 1)" != "0" ] && sh "$MODDIR/features/boot_state_props.sh" >"$SPECTER_DIR/log/boot_state_props.log" 2>&1 || true
-[ "$(cfg_get toggle_boot_hash 1)" != "0" ] && sh "$MODDIR/features/boot_hash.sh" >"$SPECTER_DIR/log/boot_hash.log" 2>&1 || true
 
 # Before keystore_info / first_boot (refresh_module_description enforces again later).
 ksm_enforce_singleton >/dev/null || true

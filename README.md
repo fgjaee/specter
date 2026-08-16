@@ -42,9 +42,8 @@ Specter is a complete rewrite of what I originally built as Yurikey.
 
 - **Keybox**: multi-source catalog, custom keybox, Google revocation, backup/restore
 - **Auto Target**: inotify + polling for new apps
-- **App Targeting**: per-app states, TEE-aware suffixes, blacklist
+- **App Targeting**: per-app states, suffixes, blacklist
 - **Security Patch**: live fetch with offline fallback
-- **TEE & Boot Hash**: TEE status/tier, vbmeta digest, boot hash
 - **ROM Fingerprint**: cleans custom ROM props and prefixes
 - **ADB Disabler**: dev options, USB debugging, OEM unlock
 - **PIF**: auto-detect variant, fetch fingerprint, block spoof engines
@@ -52,7 +51,7 @@ Specter is a complete rewrite of what I originally built as Yurikey.
 - **Module Configs**: HMA-OSS/HMA/HMAL, Zygisk Next
 - **Detection Cleanup**: removes detector logs, temp dirs, caches
 - **Widevine L1**: attestation keys via KmInstallKeybox
-- **Conflict Resolution**: 7 modules — aggressive disabled, passive coexists
+- **Conflict Resolution**: 8 modules — aggressive disabled, passive coexists, TEESimulator WebUI feature ownership
 - **Scheduler**: periodic keybox info, auto-target, autopif
 - **First-Boot**: backup originals, run full pipeline once
 
@@ -115,8 +114,13 @@ ALWAYS MAINTAIN BACKUPS OF IMPORTANT DATA.
 The WebUI is translated into Arabic, Spanish, French, Indonesian, Polish, Russian, Turkish, and Chinese (mostly AI-generated — human review welcome).
 
 To contribute translations:
-- **Preferred**: Join the [Crowdin project](https://crowdin.com/project/specter) — web UI, no git needed
+- **Preferred**: Join the [Crowdin project](https://crowdin.com/project/specter-module) — web UI, no git needed
 - **Alternative**: Edit the JSON files in `src/webroot/lang/` and submit a PR
+
+Automation:
+- Pushing changes to `src/webroot/lang/source/string.json` on `main` uploads the new keys to Crowdin
+- Every Monday a workflow downloads finished translations and opens a PR (`i18n: translation updates from Crowdin`)
+- Required repo secrets: `CROWDIN_PROJECT_ID`, `CROWDIN_PERSONAL_TOKEN`
 
 Each `*.json` file is validated against `source/string.json` in CI (`npm test`). New keys without translations fall back to English.
 
@@ -125,7 +129,6 @@ Each `*.json` file is validated against `source/string.json` in CI (`npm test`).
 - [chiteroman](https://github.com/chiteroman/PlayIntegrityFix), [KOWX712](https://github.com/KOWX712/PlayIntegrityFix) and [osm0sis](https://github.com/osm0sis/PlayIntegrityFork). PIF and forks.
 - [5ec1cff](https://github.com/5ec1cff/TrickyStore), [JingMatrix](https://github.com/JingMatrix/TEESimulator), [Enginex0](https://github.com/Enginex0/TEESimulator-RS). Tricky Store and forks.
 - [KOWX712](https://github.com/KOWX712/Tricky-Addon-Update-Target-List), [Enginex0](https://github.com/Enginex0/tricky-addon-enhanced). Tricky Store Addon.
-- [vvb2060](https://github.com/vvb2060/KeyAttestation). KeyAttestation.
 - [eltavine](https://github.com/eltavine/Duck-Detector-Refactoring). Duck Detector.
 - [Citra-Standalone](https://github.com/Citra-Standalone/TSupport-Advance). TSupport-Advance.
 

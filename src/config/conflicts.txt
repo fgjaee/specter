@@ -7,7 +7,8 @@
 # --- passive ---
 zygisk_nohello|NoHello|passive||/data/adb/modules/zygisk_nohello/service.sh
 treat_wheel|TreatWheel|passive|prop_handler|/data/adb/modules/treat_wheel/service.sh
-brene|.BRENE|passive|prop_handler,boot_hash|/data/adb/modules/brene/service.sh,/data/adb/modules/brene/post-fs-data.sh,/data/adb/modules/brene/boot-completed.sh
+brene|.BRENE|passive|prop_handler|/data/adb/modules/brene/service.sh,/data/adb/modules/brene/post-fs-data.sh,/data/adb/modules/brene/boot-completed.sh
+teesim|TEESimulator WebUI|passive|security_patch,teesim_mode|
 
 # --- aggressive ---
 tsupport-advance|TSupport-Advance|aggressive|security_patch,target|/data/adb/modules/tsupport-advance/post-fs-data.sh,/data/adb/modules/tsupport-advance/service.sh

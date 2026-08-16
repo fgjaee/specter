@@ -2240,18 +2240,6 @@ md-filled-tonal-button {
   max-width: 120px;
 }
 
-.sp-hero-tee {
-  font-size: 0.9375rem;
-  font-weight: 600;
-  color: var(--md-sys-color-on-surface);
-}
-.sp-hero-tee--normal {
-  color: var(--md-sys-color-primary);
-}
-.sp-hero-tee--broken {
-  color: var(--md-sys-color-error);
-}
-
 .info-card-mini {
   --md-filled-card-container-color: var(--md-sys-color-surface-container-highest);
   padding: 14px 12px;

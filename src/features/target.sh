@@ -6,8 +6,16 @@ MODDIR=${0%/*}
 . "$MODDIR/../lib/target_common.sh"
 
 log_d "TARGET" "Starting target management"
+
 detect_keystore_manager
-ksm_available || die "No supported keystore manager data directory found"
+ksm_available || die "No keystore manager (CleveresTricky / Tricky Store / TEESimulator / OhMyKeymint) data directory found"
+
+if ! ksm_target_management_available; then
+  case "${1:-}" in
+    --list|--list-raw) ;;
+    *) die "CleveresTricky Global Mode is enabled; target.txt is inactive. Disable Global Mode before using Specter target management." ;;
+  esac
+fi
 
 _CLEVERES_RCS_SAFE=0
 if [ "$KSM" = "cleveres" ] && { [ -f "$SPECTER_DIR/rcs_safe_mode" ] || [ -f "$SPECTER_DIR/backup/cleveres_rcs/active" ]; }; then
@@ -36,6 +44,10 @@ _prune_rcs_protected_file() {
   _prpf_tmp="${_prpf_file}.rcs.$$"
   : > "$_prpf_tmp"
   while IFS= read -r _prpf_line || [ -n "$_prpf_line" ]; do
+    [ -z "$_prpf_line" ] && { printf '\n' >> "$_prpf_tmp"; continue; }
+    case "$_prpf_line" in
+      \[*\]|\#*) printf '%s\n' "$_prpf_line" >> "$_prpf_tmp"; continue ;;
+    esac
     _prpf_base="$(_normalize_pkg "$_prpf_line")"
     if _is_rcs_protected "$_prpf_base"; then
       log_i "TARGET" "RCS Safe Mode: excluding $_prpf_base"
@@ -46,15 +58,6 @@ _prune_rcs_protected_file() {
   mv "$_prpf_tmp" "$_prpf_file"
   unset _prpf_file _prpf_tmp _prpf_line _prpf_base
 }
-
-# CleveresTricky deliberately ignores target.txt while global_mode exists.
-# Keep read-only listing available for diagnostics, but never claim a write is active.
-if ! ksm_target_management_available; then
-  case "${1:-}" in
-    --list|--list-raw) ;;
-    *) die "CleveresTricky Global Mode is enabled; target.txt is inactive. Disable Global Mode in CleveresTricky before using Specter target management." ;;
-  esac
-fi
 
 case "${1:-}" in
   --list)
@@ -68,15 +71,12 @@ case "${1:-}" in
     ;;
   --set)
     [ -n "${2:-}" ] && [ -f "$2" ] || die "target.sh --set requires an existing file argument"
-    # Apply/WebUI rebuilds from pm -3 only; re-add fixed targets missing by base name.
-    # In the proven Cleveres RCS-safe profile, Google Messages + Google IMS are
-    # never allowed back into target.txt and the safe core replaces FIXED_TARGETS.
     _prune_rcs_protected_file "$2"
     _set_bases="$SPECTER_DIR/.target_set_bases.$$"
     : > "$_set_bases"
     while IFS= read -r _set_line || [ -n "$_set_line" ]; do
       [ -z "$_set_line" ] && continue
-      case "$_set_line" in \[*\]) continue ;; esac
+      case "$_set_line" in \[*\]|\#*) continue ;; esac
       _set_base="$(_normalize_pkg "$_set_line")"
       _is_rcs_protected "$_set_base" && continue
       printf '%s\n' "$_set_base" >> "$_set_bases"
@@ -87,8 +87,9 @@ case "${1:-}" in
     done
     rm -f "$_set_bases"
     unset _set_bases _set_line _set_base _set_entry
-    ksm_commit_targets "$2"
-    log_i "TARGET" "Committed target list from $2"
+    ksm_commit_targets_merge "$2" || die "Failed to commit target list from $2"
+    rm -f "$2"
+    log_i "TARGET" "Committed target list (sections preserved)"
     exit 0
     ;;
 esac
@@ -97,7 +98,6 @@ MODULE_ROOT="${MODDIR%/features}"
 TEMP_PKGS="$MODULE_ROOT/pkgs.txt"
 _TMP_TARGET="$SPECTER_DIR/.target_new.$$"
 
-_read_tee_status
 _ensure_blacklist
 _parse_customize
 
@@ -119,7 +119,7 @@ case "${1}" in
     log_i "TARGET" "Mode: merge-denylist"
     command -v magisk >/dev/null 2>&1 || { log_w "TARGET" "magisk not found, skipping"; exit 0; }
     _merge_setup
-    trap 'rm -f "$_TMP_TARGET" "$_TMP_EXIST"' EXIT
+    trap 'rm -f "$_TMP_TARGET" "$_TMP_EXIST" "$_TMP_ADD"' EXIT
     _merge_load_existing
     _prune_rcs_protected_file "$_TMP_TARGET"
     _prune_rcs_protected_file "$_TMP_EXIST"
@@ -134,7 +134,6 @@ case "${1}" in
       done
       unset _pkg
     fi
-
     for _entry in $_EFFECTIVE_FIXED_TARGETS; do
       _append_missing "$_entry"
     done
@@ -147,7 +146,7 @@ case "${1}" in
   --merge)
     log_i "TARGET" "Mode: merge"
     _merge_setup
-    trap 'rm -f "$TEMP_PKGS" "${TEMP_PKGS}.filtered" "$_TMP_TARGET" "$_TMP_EXIST"' EXIT
+    trap 'rm -f "$TEMP_PKGS" "${TEMP_PKGS}.filtered" "$_TMP_TARGET" "$_TMP_EXIST" "$_TMP_ADD"' EXIT
     _merge_load_existing
     _prune_rcs_protected_file "$_TMP_TARGET"
     _prune_rcs_protected_file "$_TMP_EXIST"
@@ -161,13 +160,7 @@ case "${1}" in
     }
     if [ -n "$pkgs" ]; then
       echo "$pkgs" | cut -d ":" -f 2 > "$TEMP_PKGS"
-      if [ -f "$SPECTER_DIR/blacklist_enabled" ] && [ -s "$BLACKLIST" ]; then
-        if grep -Fvxf "$BLACKLIST" "$TEMP_PKGS" > "${TEMP_PKGS}.filtered" 2>/dev/null; then
-          mv "${TEMP_PKGS}.filtered" "$TEMP_PKGS"
-        else
-          log_w "TARGET" "Blacklist filtering failed"
-        fi
-      fi
+      _filter_blacklist "$TEMP_PKGS"
 
       while read -r pkg; do
         [ -z "$pkg" ] && continue
@@ -198,13 +191,7 @@ case "${1}" in
     }
     if [ -n "$pkgs" ]; then
       echo "$pkgs" | cut -d ":" -f 2 > "$TEMP_PKGS"
-      if [ -f "$SPECTER_DIR/blacklist_enabled" ] && [ -s "$BLACKLIST" ]; then
-        if grep -Fvxf "$BLACKLIST" "$TEMP_PKGS" > "${TEMP_PKGS}.filtered" 2>/dev/null; then
-          mv "${TEMP_PKGS}.filtered" "$TEMP_PKGS"
-        else
-          log_w "TARGET" "Blacklist filtering failed"
-        fi
-      fi
+      _filter_blacklist "$TEMP_PKGS"
 
       while read -r pkg; do
         [ -z "$pkg" ] && continue
@@ -218,7 +205,6 @@ case "${1}" in
     fi
 
     sort -u "$_TMP_TARGET" -o "$_TMP_TARGET"
-
     ksm_commit_targets "$_TMP_TARGET"
 
     _count=$(ksm_read_targets | wc -l)

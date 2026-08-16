@@ -11,9 +11,7 @@ export function openPropHandlerDialog() {
     cfgGet('toggle_prop_handler', '1'),
     cfgGet('toggle_boot_state_props', '1'),
     cfgGet('toggle_bootmode_spoof', '1'),
-    cfgGet('toggle_boot_hash', '1'),
-    cfgGet('toggle_vbmeta_props', '1'),
-  ]).then(([parent, state, bootmode, bootHash, vbmeta]) => {
+  ]).then(([parent, state, bootmode]) => {
     const enabled = parent !== '0';
     const banner = enabled ? '' : `<div style="display:flex;align-items:center;gap:8px;padding:12px 16px;background:var(--md-sys-color-surface-variant);border-radius:12px;margin:0 0 12px 0;color:var(--md-sys-color-on-surface-variant);font-size:0.875rem;"><md-icon>info</md-icon><span>${t('feature_disabled_desc', 'Feature is disabled, enable it in Control to configure')}</span></div>`;
     dialog.innerHTML = `
@@ -46,26 +44,6 @@ export function openPropHandlerDialog() {
             <div class="spacer"></div>
             <md-switch icons id="ph-bootmode" ${bootmode === '1' ? 'selected' : ''} ${enabled ? '' : 'disabled'}></md-switch>
           </div>
-
-          <div class="list-item list-item--toggle">
-            <div class="li-icon"><md-icon aria-hidden="true">verified_user</md-icon></div>
-            <div class="list-item-content">
-              <div class="toggle-text">${t('prop_handler_boot_hash', 'TEE Boot Hash')}</div>
-              <span class="supporting-text">${t('prop_handler_boot_hash_desc', 'Resolve boot hash from TEE attestation or vbmeta partition at boot')}</span>
-            </div>
-            <div class="spacer"></div>
-            <md-switch icons id="ph-boot-hash" ${bootHash === '1' ? 'selected' : ''} ${enabled ? '' : 'disabled'}></md-switch>
-          </div>
-
-          <div class="list-item list-item--toggle">
-            <div class="li-icon"><md-icon aria-hidden="true">verified_user</md-icon></div>
-            <div class="list-item-content">
-              <div class="toggle-text">${t('prop_handler_vbmeta', 'VBMeta Props')}</div>
-              <span class="supporting-text">${t('prop_handler_vbmeta_desc', 'Apply AVB vbmeta properties (digest, version, hash algorithm) at boot')}</span>
-            </div>
-            <div class="spacer"></div>
-            <md-switch icons id="ph-vbmeta" ${vbmeta === '1' ? 'selected' : ''} ${enabled ? '' : 'disabled'}></md-switch>
-          </div>
         </div>
       </div>
       <div slot="actions">
@@ -87,12 +65,8 @@ export function openPropHandlerDialog() {
       try {
         const s = dialog.querySelector('#ph-state') as MdSwitch;
         const bm = dialog.querySelector('#ph-bootmode') as MdSwitch;
-        const bh = dialog.querySelector('#ph-boot-hash') as MdSwitch;
-        const vb = dialog.querySelector('#ph-vbmeta') as MdSwitch;
         cfgSet('toggle_boot_state_props', s.selected ? '1' : '0');
         cfgSet('toggle_bootmode_spoof', bm.selected ? '1' : '0');
-        cfgSet('toggle_boot_hash', bh.selected ? '1' : '0');
-        cfgSet('toggle_vbmeta_props', vb.selected ? '1' : '0');
         showToast(t('toast_success', 'Done'), { icon: 'check_circle', type: 'success', autoCloseDelay: 2500 });
         dialog.close();
       } catch (e) {

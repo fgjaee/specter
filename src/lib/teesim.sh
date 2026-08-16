@@ -1,6 +1,35 @@
 # shellcheck shell=sh
-# JingMatrix TEESimulator — profiles.default in config.json via IR (awk; shell was too slow):
-#   P id | K keybox | M mode | O osVersion | S/V/B patch | I field val | A pkg
+# JingMatrix TEESimulator — profiles.default in config.json edited via an
+# intermediate representation (IR), because sed-on-JSON is not a thing.
+#
+# IR grammar (one record per line, fields separated by spaces):
+#   P <id>        profile header; ends the previous profile's record list
+#   K <file>      keybox file for the profile
+#   M <mode>      mode: patch | generation
+#   O <value>     osVersion
+#   S <value>     patchLevel.system
+#   V <value>     patchLevel.vendor
+#   B <value>     patchLevel.boot
+#   I <field> <v> identity field: brand|device|product|manufacturer|model|
+#                 serial|imei|meid|imei2
+#   A <pkg>       one entry of the profile's apps list (also @user and
+#                 uid:N tokens — preserved verbatim)
+#   X <key> <v>   unknown field, v already JSON-encoded (string/number/bool)
+#                 — round-tripped verbatim so newer config.json schemas
+#                 (e.g. autoIncludeNewApps) survive Specter edits
+#   T <key> <v>   unknown top-level field, same verbatim encoding
+#
+# Invariants:
+#   - _teesim_to_ir    config.json → IR; tokenizer drops comments/whitespace
+#                      but the file itself is not modified (reads are pure)
+#   - _teesim_from_ir  IR → config.json; profiles without apps are dropped,
+#                      missing fields fall back to profile defaults
+#   - _teesim_load_ir  read + repair (seeds a default profile from
+#                      config.default.json, appends one when missing); only
+#                      write paths use it — readers use _teesim_to_ir
+#   - Specter manages ONLY the "default" profile: _teesim_commit_apps,
+#     _teesim_set_patch, _teesim_set_mode and _teesim_ensure_keybox_field
+#     all scope their edits to it; other profiles pass through untouched
 
 _teesim_to_ir() {
   _tti_file="$1"
@@ -31,6 +60,15 @@ _teesim_to_ir() {
           }
           break
         }
+        if (tok[i] ~ /^"/ && tok[i] != "\"version\"") {
+          tk = unquote(tok[i]); i++
+          if (tok[i] == ":") i++
+          if (tok[i] ~ /^"/) print "T " tk " " json_quote(unquote(tok[i]))
+          else if (tok[i] == "{" || tok[i] == "[") i = skip_value(i, tok, n)
+          else print "T " tk " " tok[i]
+          i++
+          continue
+        }
         i++
       }
     }
@@ -39,6 +77,17 @@ _teesim_to_ir() {
       gsub(/^"/, "", s); gsub(/"$/, "", s)
       gsub(/\\"/, "\"", s); gsub(/\\\\/, "\\", s)
       return s
+    }
+
+    function json_quote(s,   out, i, c) {
+      out = "\""
+      for (i = 1; i <= length(s); i++) {
+        c = substr(s, i, 1)
+        if (c == "\"") out = out "\\\""
+        else if (c == "\\") out = out "\\\\"
+        else out = out c
+      }
+      return out "\""
     }
 
     function parse_profile(i, tok, n,   key, val) {
@@ -77,9 +126,11 @@ _teesim_to_ir() {
                    key == "manufacturer" || key == "model" || key == "serial" ||
                    key == "imei" || key == "meid" || key == "imei2")
             print "I " key " " val
+          else print "X " key " " json_quote(val)
         } else if (tok[i] == "{" || tok[i] == "[") {
           i = skip_value(i, tok, n)
         } else {
+          print "X " key " " tok[i]
           i++
         }
         if (tok[i] == ",") i++
@@ -180,6 +231,28 @@ _teesim_from_ir() {
       apps[id, napps[id]] = substr($0, 3)
       next
     }
+    /^X / {
+      rest = substr($0, 3)
+      sp = index(rest, " ")
+      if (sp == 0) next
+      field = substr(rest, 1, sp - 1)
+      val = substr(rest, sp + 1)
+      nx[id]++
+      xkey[id, nx[id]] = field
+      xval[id, field] = val
+      next
+    }
+    /^T / {
+      rest = substr($0, 3)
+      sp = index(rest, " ")
+      if (sp == 0) next
+      field = substr(rest, 1, sp - 1)
+      val = substr(rest, sp + 1)
+      nt++
+      tkey[nt] = field
+      tval[field] = val
+      next
+    }
     END {
       nkeep = 0
       for (p = 1; p <= nprof; p++) {
@@ -190,6 +263,9 @@ _teesim_from_ir() {
       if (nkeep < 1) exit 1
       print "{"
       print "  \"version\": 1,"
+      for (t = 1; t <= nt; t++) {
+        printf "  \"%s\": %s,\n", tkey[t], tval[tkey[t]]
+      }
       print "  \"profiles\": {"
       for (p = 1; p <= nkeep; p++) {
         id = keep[p]
@@ -204,6 +280,10 @@ _teesim_from_ir() {
           f = fields[fi]
           v = ((id SUBSEP f) in ident) ? ident[id, f] : ""
           printf "      \"%s\": \"%s\",\n", f, jesc(v)
+        }
+        for (x = 1; x <= nx[id]; x++) {
+          f = xkey[id, x]
+          printf "      \"%s\": %s,\n", f, xval[id, f]
         }
         print "      \"apps\": ["
         for (a = 1; a <= napps[id]; a++) {
@@ -290,11 +370,19 @@ _teesim_write_ir() {
   unset _twi_file _twi_ir _twi_tmp
 }
 
+# $2 = optional profile id; when set, only that profile's apps are returned.
 _teesim_read_apps() {
-  _tra_file="$1"
-  [ -f "$_tra_file" ] && [ -s "$_tra_file" ] || { unset _tra_file; return 0; }
-  _teesim_to_ir "$_tra_file" | awk '/^A / { print substr($0, 3) }' | sort -u
-  unset _tra_file
+  _tra_file="$1" _tra_profile="${2:-}"
+  [ -f "$_tra_file" ] && [ -s "$_tra_file" ] || { unset _tra_file _tra_profile; return 0; }
+  if [ -n "$_tra_profile" ]; then
+    _teesim_to_ir "$_tra_file" | awk -v prof="$_tra_profile" '
+      /^P / { cur = $2 }
+      cur == prof && /^A / { print substr($0, 3) }
+    ' | sort -u
+  else
+    _teesim_to_ir "$_tra_file" | awk '/^A / { print substr($0, 3) }' | sort -u
+  fi
+  unset _tra_file _tra_profile
 }
 
 _teesim_commit_apps() {
@@ -315,6 +403,17 @@ _teesim_commit_apps() {
     [ -n "$_tca_base" ] && printf '%s\n' "$_tca_base" >> "$_tca_pkgs"
   done < "$_tca_src"
 
+  # Keep default-profile entries Specter does not understand as packages:
+  # uid:N and pkg@user tokens written by the TEESimulator WebUI.
+  awk '
+    BEGIN { in_def = 0 }
+    /^P / { in_def = ($2 == "default"); next }
+    in_def && /^A / {
+      e = substr($0, 3)
+      if (e ~ /^uid:[0-9]+$/ || e ~ /@[0-9]+$/) print e
+    }
+  ' "$_tca_ir" >> "$_tca_pkgs"
+
   awk -v pkgsfile="$_tca_pkgs" '
     BEGIN { in_def = 0 }
     /^P / {
@@ -323,7 +422,12 @@ _teesim_commit_apps() {
       print
       next
     }
-    /^A / { next }
+    /^A / {
+      # Only the default profile is managed; other profiles keep their apps.
+      if (in_def) next
+      print
+      next
+    }
     { print }
     END { if (in_def) flush_def() }
     function flush_def(   p) {
@@ -347,7 +451,7 @@ _teesim_get_boot_patch() {
     cur == "default" && /^B / { print substr($0, 3); exit }
   ') || _tgp_val=""
   case "$_tgp_val" in
-    [0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9])
+    [0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]|today|no|harvested|system_property)
       printf '%s\n' "$_tgp_val"
       unset _tgp_file _tgp_val
       return 0
@@ -409,7 +513,9 @@ _teesim_set_mode() {
     return 1
   }
   awk -v mode="$_tsm_mode" '
-    /^M / { print "M " mode; next }
+    BEGIN { cur = "" }
+    /^P / { cur = $2; print; next }
+    cur == "default" && /^M / { print "M " mode; next }
     { print }
   ' "$_tsm_ir" > "${_tsm_ir}.out"
   _teesim_write_ir "$_tsm_cfg" "${_tsm_ir}.out"
