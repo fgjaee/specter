@@ -1,4 +1,4 @@
-plan "CleveresTricky backend detection, paths, patches, conflicts, and Global Mode safety"
+plan "CleveresTricky backend detection, paths, patches, conflicts, Global Mode, and RCS-safe targeting"
 
 # ---------- detection and paths ----------
 bootstrap
@@ -110,5 +110,52 @@ assert_contains "auto target: global mode skip logged" "$_out" "Global Mode is a
 _out=$(run_feature target.sh --list 2>&1); _rc=$?
 assert_eq "target: global mode list allowed" "0" "$_rc"
 assert_contains "target: global mode list content" "$_out" "com.example.one"
+
+# ---------- proven RCS-safe Cleveres scope ----------
+bootstrap
+source_libs
+mk_module cleverestricky "CleveresTricky"
+mkdir -p "$CLEVERES_DIR"
+touch "$SPECTER_DIR/rcs_safe_mode"
+_input="$TEST_ROOT/rcs_safe_input.txt"
+printf '%s\n' \
+  'com.example.extra' \
+  'com.google.android.apps.messaging' \
+  'com.google.android.ims' > "$_input"
+
+_out=$(run_feature target.sh --set "$_input" 2>&1); _rc=$?
+assert_eq "rcs safe: target set succeeds" "0" "$_rc"
+assert_contains "rcs safe: keeps requested extra" "$(cat "$CLEVERES_TARGETS")" "com.example.extra"
+assert_contains "rcs safe: requires android" "$(cat "$CLEVERES_TARGETS")" "android"
+assert_contains "rcs safe: requires gms" "$(cat "$CLEVERES_TARGETS")" "com.google.android.gms"
+assert_contains "rcs safe: requires key attestation" "$(cat "$CLEVERES_TARGETS")" "io.github.vvb2060.keyattestation"
+assert_not_contains "rcs safe: excludes Messages" "$(cat "$CLEVERES_TARGETS")" "com.google.android.apps.messaging"
+assert_not_contains "rcs safe: excludes Google IMS" "$(cat "$CLEVERES_TARGETS")" "com.google.android.ims"
+
+# A later merge (including action.sh's normal target merge) must not undo RCS safety.
+printf '%s\n' \
+  'android' \
+  'com.google.android.gms' \
+  'com.google.android.apps.messaging' \
+  'com.google.android.ims' > "$CLEVERES_TARGETS"
+_out=$(run_feature target.sh --merge 2>&1); _rc=$?
+assert_eq "rcs safe: merge succeeds" "0" "$_rc"
+assert_contains "rcs safe: merge restores Key Attestation" "$(cat "$CLEVERES_TARGETS")" "io.github.vvb2060.keyattestation"
+assert_not_contains "rcs safe: merge prunes Messages" "$(cat "$CLEVERES_TARGETS")" "com.google.android.apps.messaging"
+assert_not_contains "rcs safe: merge prunes Google IMS" "$(cat "$CLEVERES_TARGETS")" "com.google.android.ims"
+
+# Background Auto Target also cleans a stale protected entry while retaining the core.
+printf '%s\n' \
+  'android' \
+  'com.google.android.gms' \
+  'com.google.android.apps.messaging' \
+  'com.google.android.ims' > "$CLEVERES_TARGETS"
+_out=$(run_feature auto_target.sh 2>&1); _rc=$?
+assert_eq "rcs safe: auto target succeeds" "0" "$_rc"
+assert_contains "rcs safe: auto target keeps Key Attestation" "$(cat "$CLEVERES_TARGETS")" "io.github.vvb2060.keyattestation"
+assert_not_contains "rcs safe: auto target prunes Messages" "$(cat "$CLEVERES_TARGETS")" "com.google.android.apps.messaging"
+assert_not_contains "rcs safe: auto target prunes Google IMS" "$(cat "$CLEVERES_TARGETS")" "com.google.android.ims"
+
+unset _input _out _rc
 
 done_testing
