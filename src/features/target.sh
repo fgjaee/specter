@@ -8,7 +8,56 @@ MODDIR=${0%/*}
 log_d "TARGET" "Starting target management"
 
 detect_keystore_manager
-ksm_available || die "No keystore manager (Tricky Store / TEESimulator / OhMyKeymint) data directory found"
+ksm_available || die "No keystore manager (CleveresTricky / Tricky Store / TEESimulator / OhMyKeymint) data directory found"
+
+if ! ksm_target_management_available; then
+  case "${1:-}" in
+    --list|--list-raw) ;;
+    *) die "CleveresTricky Global Mode is enabled; target.txt is inactive. Disable Global Mode before using Specter target management." ;;
+  esac
+fi
+
+_CLEVERES_RCS_SAFE=0
+if [ "$KSM" = "cleveres" ] && { [ -f "$SPECTER_DIR/rcs_safe_mode" ] || [ -f "$SPECTER_DIR/backup/cleveres_rcs/active" ]; }; then
+  _CLEVERES_RCS_SAFE=1
+fi
+_EFFECTIVE_FIXED_TARGETS="$FIXED_TARGETS"
+[ "$_CLEVERES_RCS_SAFE" = "1" ] && _EFFECTIVE_FIXED_TARGETS="$CLEVERES_RCS_SAFE_TARGETS"
+
+_is_rcs_protected() {
+  [ "$_CLEVERES_RCS_SAFE" = "1" ] || return 1
+  _irp_pkg="$1"
+  for _irp_protected in $CLEVERES_RCS_PROTECTED_TARGETS; do
+    if [ "$_irp_pkg" = "$_irp_protected" ]; then
+      unset _irp_pkg _irp_protected
+      return 0
+    fi
+  done
+  unset _irp_pkg _irp_protected
+  return 1
+}
+
+_prune_rcs_protected_file() {
+  [ "$_CLEVERES_RCS_SAFE" = "1" ] || return 0
+  _prpf_file="$1"
+  [ -f "$_prpf_file" ] || { unset _prpf_file; return 0; }
+  _prpf_tmp="${_prpf_file}.rcs.$$"
+  : > "$_prpf_tmp"
+  while IFS= read -r _prpf_line || [ -n "$_prpf_line" ]; do
+    [ -z "$_prpf_line" ] && { printf '\n' >> "$_prpf_tmp"; continue; }
+    case "$_prpf_line" in
+      \[*\]|\#*) printf '%s\n' "$_prpf_line" >> "$_prpf_tmp"; continue ;;
+    esac
+    _prpf_base="$(_normalize_pkg "$_prpf_line")"
+    if _is_rcs_protected "$_prpf_base"; then
+      log_i "TARGET" "RCS Safe Mode: excluding $_prpf_base"
+      continue
+    fi
+    printf '%s\n' "$_prpf_line" >> "$_prpf_tmp"
+  done < "$_prpf_file"
+  mv "$_prpf_tmp" "$_prpf_file"
+  unset _prpf_file _prpf_tmp _prpf_line _prpf_base
+}
 
 case "${1:-}" in
   --list)
@@ -22,20 +71,22 @@ case "${1:-}" in
     ;;
   --set)
     [ -n "${2:-}" ] && [ -f "$2" ] || die "target.sh --set requires an existing file argument"
-    # Apply/WebUI rebuilds from pm -3 only; re-add FIXED_TARGETS missing by base name.
+    _prune_rcs_protected_file "$2"
     _set_bases="$SPECTER_DIR/.target_set_bases.$$"
     : > "$_set_bases"
     while IFS= read -r _set_line || [ -n "$_set_line" ]; do
       [ -z "$_set_line" ] && continue
-      case "$_set_line" in \[*\]) continue ;; esac
-      printf '%s\n' "$(_normalize_pkg "$_set_line")" >> "$_set_bases"
+      case "$_set_line" in \[*\]|\#*) continue ;; esac
+      _set_base="$(_normalize_pkg "$_set_line")"
+      _is_rcs_protected "$_set_base" && continue
+      printf '%s\n' "$_set_base" >> "$_set_bases"
     done < "$2"
-    for _set_entry in $FIXED_TARGETS; do
+    for _set_entry in $_EFFECTIVE_FIXED_TARGETS; do
       grep -Fxq "$_set_entry" "$_set_bases" 2>/dev/null && continue
       printf '%s\n' "$_set_entry" >> "$2"
     done
     rm -f "$_set_bases"
-    unset _set_bases _set_line _set_entry
+    unset _set_bases _set_line _set_base _set_entry
     ksm_commit_targets_merge "$2" || die "Failed to commit target list from $2"
     rm -f "$2"
     log_i "TARGET" "Committed target list (sections preserved)"
@@ -54,7 +105,7 @@ _ensure_target_txt() {
   [ -n "$(ksm_read_targets)" ] && return 0
   log_w "TARGET" "target list missing or empty, creating default"
   _et_tmp="$SPECTER_DIR/.target_seed.$$"
-  for _entry in $FIXED_TARGETS; do
+  for _entry in $_EFFECTIVE_FIXED_TARGETS; do
     echo "$_entry"
   done > "$_et_tmp"
   ksm_commit_targets "$_et_tmp"
@@ -70,29 +121,37 @@ case "${1}" in
     _merge_setup
     trap 'rm -f "$_TMP_TARGET" "$_TMP_EXIST" "$_TMP_ADD"' EXIT
     _merge_load_existing
+    _prune_rcs_protected_file "$_TMP_TARGET"
+    _prune_rcs_protected_file "$_TMP_EXIST"
 
     _denylist=$(magisk --denylist ls 2>/dev/null | awk -F'|' '{print $1}' | grep -v "isolated" || true)
     if [ -n "$_denylist" ]; then
       for _pkg in $_denylist; do
         [ -z "$_pkg" ] && continue
+        _is_rcs_protected "$_pkg" && continue
         _compute_suffix "$_pkg"
         _append_missing "${_pkg}${_suffix}"
       done
       unset _pkg
     fi
+    for _entry in $_EFFECTIVE_FIXED_TARGETS; do
+      _append_missing "$_entry"
+    done
 
     _merge_cleanup
     : "${_added:=0}"
     log_i "TARGET" "Denylist merge: checked $_count entries, added $_added"
-    unset _count _added
+    unset _count _added _entry
     ;;
   --merge)
     log_i "TARGET" "Mode: merge"
     _merge_setup
     trap 'rm -f "$TEMP_PKGS" "${TEMP_PKGS}.filtered" "$_TMP_TARGET" "$_TMP_EXIST" "$_TMP_ADD"' EXIT
     _merge_load_existing
+    _prune_rcs_protected_file "$_TMP_TARGET"
+    _prune_rcs_protected_file "$_TMP_EXIST"
 
-    for entry in $FIXED_TARGETS; do
+    for entry in $_EFFECTIVE_FIXED_TARGETS; do
       _append_missing "$entry"
     done
 
@@ -105,6 +164,7 @@ case "${1}" in
 
       while read -r pkg; do
         [ -z "$pkg" ] && continue
+        _is_rcs_protected "$pkg" && continue
         _compute_suffix "$pkg"
         _append_missing "${pkg}${_suffix}"
       done < "$TEMP_PKGS"
@@ -121,7 +181,7 @@ case "${1}" in
     _count=0
     trap 'rm -f "$TEMP_PKGS" "${TEMP_PKGS}.filtered" "$_TMP_TARGET"' EXIT
 
-    for entry in $FIXED_TARGETS; do
+    for entry in $_EFFECTIVE_FIXED_TARGETS; do
       echo "$entry" >> "$_TMP_TARGET"
       _count=$((_count + 1))
     done
@@ -135,6 +195,7 @@ case "${1}" in
 
       while read -r pkg; do
         [ -z "$pkg" ] && continue
+        _is_rcs_protected "$pkg" && continue
         _suffix=""
         _compute_suffix "$pkg"
         echo "${pkg}${_suffix}" >> "$_TMP_TARGET"
@@ -144,7 +205,6 @@ case "${1}" in
     fi
 
     sort -u "$_TMP_TARGET" -o "$_TMP_TARGET"
-
     ksm_commit_targets "$_TMP_TARGET"
 
     _count=$(ksm_read_targets | wc -l)
