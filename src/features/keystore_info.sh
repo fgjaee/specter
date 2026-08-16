@@ -16,7 +16,8 @@ cat <<EOF > "$INFO_PATH"
   "format": "$(_escape_json "$KSM_FORMAT")",
   "dir": "$(_escape_json "$KSM_DIR")",
   "targets": "$(_escape_json "$KSM_TARGETS")",
-  "security": "$(_escape_json "$KSM_SECURITY")"
+  "config": "$(_escape_json "$KSM_CONFIG")",
+  "perAppModes": $([ "$KSM_PER_APP_MODES" = "1" ] && echo true || echo false)
 }
 EOF
 

@@ -40,6 +40,10 @@ _conflict_toggle_key() {
 _feature_should_run() {
   _fsr_feature="$1" _fsr_default="${2:-1}"
   [ "$(cfg_get "$(_conflict_toggle_key "$_fsr_feature")" "$_fsr_default")" != "0" ] || return 1
+  if _conflict_claimed "$_fsr_feature"; then
+    log_d "CONFLICT" "$_fsr_feature claimed by another module, skipping"
+    return 1
+  fi
 }
 
 _apply_scripts() {

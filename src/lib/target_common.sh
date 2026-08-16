@@ -31,27 +31,24 @@ _parse_customize() {
   unset _customize _first
 }
 
-# Read TEE status, sets $teeBroken. Always return success: target.sh runs with
-# set -e and an absent status cache must not abort an otherwise valid merge.
-_read_tee_status() {
-  teeBroken="false"
-  if [ -f "$TEE_STATUS" ]; then
-    teeBroken=$(grep -E '^(teeBroken|tee_broken)=' "$TEE_STATUS" 2>/dev/null | cut -d= -f2 || echo "false")
-  fi
-  return 0
-}
-
 # Merge helpers — used by --merge and --merge-denylist in target.sh
 
 _merge_setup() {
   _count=0; _added=0
   _TMP_EXIST="$SPECTER_DIR/.target_exist.$$"
   _TMP_TARGET="$SPECTER_DIR/.target_new.$$"
+  _TMP_ADD="$SPECTER_DIR/.target_add.$$"
+  : > "$_TMP_ADD"
 }
 
 _merge_cleanup() {
-  [ -f "$_TMP_TARGET" ] && ksm_commit_targets "$_TMP_TARGET"
-  unset _TMP_EXIST _TMP_TARGET
+  if [ -f "$_TMP_TARGET" ]; then
+    # New packages go into the default (pre-section) keybox scope; appending
+    # at the end would silently assign them to the last [name.xml] section.
+    _txt_insert_default "$_TMP_TARGET" "$_TMP_ADD"
+    ksm_commit_targets "$_TMP_TARGET"
+  fi
+  unset _TMP_EXIST _TMP_TARGET _TMP_ADD
 }
 
 _merge_load_existing() {
@@ -71,11 +68,7 @@ _append_missing() {
   _am_base=$(_normalize_pkg "$_am_line")
   [ -z "$_am_base" ] && { unset _am_line _am_base; return 0; }
   if ! grep -Fxq "$_am_base" "$_TMP_EXIST" 2>/dev/null; then
-    if [ "$KSM" = "cleveres" ]; then
-      printf '%s\n' "$_am_base" >> "$_TMP_TARGET"
-    else
-      printf '%s\n' "$_am_line" >> "$_TMP_TARGET"
-    fi
+    printf '%s\n' "$_am_line" >> "$_TMP_ADD"
     printf '%s\n' "$_am_base" >> "$_TMP_EXIST"
     _added=$((_added + 1))
   fi
@@ -83,26 +76,33 @@ _append_missing() {
   unset _am_line _am_base
 }
 
+# Filter $1 (a package list file) against the blacklist when enabled.
+_filter_blacklist() {
+  _fb_file="$1"
+  [ -f "$SPECTER_DIR/blacklist_enabled" ] && [ -s "$BLACKLIST" ] || { unset _fb_file; return 0; }
+  if grep -Fvxf "$BLACKLIST" "$_fb_file" > "${_fb_file}.filtered" 2>/dev/null; then
+    mv "${_fb_file}.filtered" "$_fb_file"
+  else
+    log_w "TARGET" "Blacklist filtering failed"
+  fi
+  unset _fb_file
+}
+
 # Compute suffix for a given package based on customize.txt and TEE status
-# Sets $_suffix and $_custom_matched. CleveresTricky's current target parser
-# is package-scope only; do not emit Tricky Store's !/? policy suffixes there.
+# Sets $_suffix and $_custom_matched
 _compute_suffix() {
   _pkg="$1"
   _suffix="" _custom_matched=false
-  [ "$KSM" = "cleveres" ] && return 0
+  # Suffixes are only meaningful when the backend supports per-app modes
+  # (txt); json/toml get them stripped on commit anyway.
+  [ "$KSM_PER_APP_MODES" = "1" ] || return 0
   if [ "$_customize_mode" = "selective" ]; then
     _match=$(grep -E "^${_pkg}[!?]?$" "$_customize" 2>/dev/null | head -1)
     if [ -n "$_match" ]; then
       _custom_matched=true
       case "$_match" in
         *!) _suffix="!" ;;
-        *\?)
-          if [ "$teeBroken" = "true" ]; then
-            _suffix=""
-          else
-            _suffix="?"
-          fi
-          ;;
+        *\?) _suffix="?" ;;
         *) _suffix="" ;;
       esac
     fi
@@ -112,4 +112,5 @@ _compute_suffix() {
   elif [ "$_customize_mode" = "condition_all" ]; then
     _suffix="?"
   fi
+
 }

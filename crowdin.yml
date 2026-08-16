@@ -1,16 +1,25 @@
+# Crowdin CLI v3 configuration for Specter.
+# Docs: https://developer.crowdin.com/crowdin-cli-v3/configuration-file/
+#
+# Source of truth: src/webroot/lang/source/string.json (English).
+# Translations land back next to it, one JSON file per language.
+# Only Chinese differs between the Crowdin code (zh-CN) and the local
+# filename (zh.json); the rest of the languages match 1:1.
+
 project_id_env: CROWDIN_PROJECT_ID
 api_token_env: CROWDIN_PERSONAL_TOKEN
-preserve_hierarchy: true
+
+base_path: .
+preserve_hierarchy: false
+
 files:
   - source: /src/webroot/lang/source/string.json
     translation: /src/webroot/lang/%two_letters_code%.json
+    type: json
+    update_option: update_as_unapproved
+    export_options:
+      escape_quotes: 0
+      escape_special_characters: 0
     languages_mapping:
       two_letters_code:
         zh-CN: zh
-        es-ES: es
-        fr-FR: fr
-        ar-SA: ar
-        ru-RU: ru
-        pl-PL: pl
-        tr-TR: tr
-        id-ID: id

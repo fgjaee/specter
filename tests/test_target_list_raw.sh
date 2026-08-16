@@ -28,6 +28,13 @@ assert_contains "txt set: FIXED gms" "$_tc_txt" "com.google.android.gms"
 assert_contains "txt set: FIXED vending" "$_tc_txt" "com.android.vending"
 assert_file_not_exists "txt set: staging consumed" "$_tc_staging"
 assert_file_exists "txt set: backup" "${KSM_TARGETS}.bak"
+assert_contains "txt set: section preserved" "$_tc_txt" "[a section]"
+_tc_new_line=$(grep -n 'com.new.app' "$KSM_TARGETS" | cut -d: -f1)
+_tc_sec_line=$(grep -n '\[a section\]' "$KSM_TARGETS" | cut -d: -f1)
+[ -n "$_tc_new_line" ] && [ -n "$_tc_sec_line" ] && [ "$_tc_new_line" -lt "$_tc_sec_line" ] \
+  && ok "txt set: new app in default block" || fail "txt set: new app in default block"
+assert_not_contains "txt set: unselected member dropped" "$_tc_txt" "com.existing.app"
+assert_not_contains "txt set: unselected pinned dropped" "$_tc_txt" "com.pinned.app"
 
 # pinned suffix kept; no bare duplicate of gms
 _tc_staging="$TEST_ROOT/staging_pin.txt"
@@ -68,6 +75,49 @@ assert_not_contains "toml set: suffix stripped" "$_tc_toml" "com.new.app?"
 assert_contains "toml set: FIXED gms" "$_tc_toml" "com.google.android.gms"
 assert_contains "toml set: siblings kept" "$_tc_toml" "[main]"
 assert_file_not_exists "toml set: target.txt untouched" "$TARGET_TXT"
+
+# ---------- JingMatrix TEESimulator: json backend, default profile only ----------
+bootstrap
+source_libs
+mk_module teesim "TEESimulator"
+mkdir -p "$TEESIM_DIR"
+cat > "$TEESIM_CONFIG" << 'EOF'
+{
+  "version": 1,
+  "profiles": {
+    "default": {
+      "keybox": "keybox.xml",
+      "mode": "patch",
+      "patchLevel": { "system": "today", "vendor": "YYYY-MM-05", "boot": "YYYY-MM-05" },
+      "osVersion": "",
+      "brand": "", "device": "", "product": "", "manufacturer": "", "model": "",
+      "serial": "", "imei": "", "meid": "", "imei2": "",
+      "apps": ["com.google.android.gms"]
+    },
+    "work": {
+      "keybox": "keybox.xml",
+      "mode": "patch",
+      "patchLevel": { "system": "today", "vendor": "YYYY-MM-05", "boot": "YYYY-MM-05" },
+      "osVersion": "",
+      "brand": "", "device": "", "product": "", "manufacturer": "", "model": "",
+      "serial": "", "imei": "", "meid": "", "imei2": "",
+      "apps": ["com.eltavine.duckdetector"]
+    }
+  }
+}
+EOF
+detect_keystore_manager
+_tc_out3=$(run_feature target.sh --list-raw)
+assert_contains "json list-raw: default profile app" "$_tc_out3" "com.google.android.gms"
+assert_not_contains "json list-raw: other profile hidden" "$_tc_out3" "com.eltavine.duckdetector"
+
+_tc_staging3="$TEST_ROOT/staging_json.txt"
+printf 'com.google.android.gms\ncom.new.json.app\n' > "$_tc_staging3"
+run_feature target.sh --set "$_tc_staging3" >/dev/null
+_tc_cfg=$(cat "$TEESIM_CONFIG")
+assert_contains "json set: new app on default" "$_tc_cfg" "com.new.json.app"
+assert_contains "json set: other profile kept" "$_tc_cfg" '"work"'
+assert_contains "json set: other profile apps kept" "$_tc_cfg" "com.eltavine.duckdetector"
 
 # ---------- argument handling ----------
 bootstrap

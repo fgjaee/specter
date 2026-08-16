@@ -2,39 +2,29 @@ import '@material/web/labs/segmentedbuttonset/outlined-segmented-button-set.js';
 import '@material/web/labs/segmentedbutton/outlined-segmented-button.js';
 import '@material/web/switch/switch.js';
 import { exec, getModuleDir, getDataDir } from './bridge.js';
-import { cfgGet, cfgSet } from './cfg.js';
+import { cfgGet } from './cfg.js';
 import { shellEscape, fetchJson } from './utils.js';
 import { showToast } from './toast.js';
 import { getTranslation } from './i18n.js';
 import { appendToOutput } from './terminal.js';
 import { API_URLS } from './constants.js';
 import type { KeystoreManagerJson } from './types.js';
+import { AppIconManager, ksuGlobal } from './target-apps-icons.js';
+import { openTeesimModeDialog, openModeDialog, openRegenerateDialog } from './target-apps-dialogs.js';
+import type { TargetDialogsContext } from './target-apps-dialogs.js';
 
-type TargetState = 'unchecked' | 'bare' | 'conditional' | 'force';
+export type TargetState = 'unchecked' | 'bare' | 'conditional' | 'force';
 type BlacklistState = 'unchecked' | 'blacklisted';
-type AppState = TargetState | BlacklistState;
+export type AppState = TargetState | BlacklistState;
 type Mode = 'target' | 'blacklist';
-type KsmFormat = 'txt' | 'toml' | 'json' | '';
+export type KsmFormat = 'txt' | 'toml' | 'json' | '';
 
-interface TargetApp {
+export interface TargetApp {
   packageName: string;
   appName: string;
   state: AppState;
 }
 
-const ANDROID_PATH = 'M40-240q9-107 65.5-197T256-580l-74-128q-6-9-3-19t13-15q8-5 18-2t16 12l74 128q86-36 180-36t180 36l74-128q6-9 16-12t18 2q10 5 13 15t-3 19l-74 128q94 53 150.5 143T920-240H40Zm275.5-124.5Q330-379 330-400t-14.5-35.5Q301-450 280-450t-35.5 14.5Q230-421 230-400t14.5 35.5Q259-350 280-350t35.5-14.5Zm400 0Q730-379 730-400t-14.5-35.5Q701-450 680-450t-35.5 14.5Q630-421 630-400t14.5 35.5Q659-350 680-350t35.5-14.5Z';
-
-function themedFallbackIcon(): string {
-  const root = document.documentElement;
-  const cs = getComputedStyle(root);
-  const bg = cs.getPropertyValue('--md-sys-color-surface-container-highest').trim() || '#e6e0e9';
-  const fg = cs.getPropertyValue('--md-sys-color-on-surface-variant').trim() || '#49454f';
-  return 'data:image/svg+xml,' + encodeURIComponent(
-    `<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 -960 960 960">`
-    + `<circle cx="480" cy="-480" r="460" fill="${bg}"/>`
-    + `<g transform="matrix(0.7 0 0 0.7 144 -144)"><path fill="${fg}" d="${ANDROID_PATH}"/></g></svg>`
-  );
-}
 
 const TARGET_MODE_ORDER: TargetState[] = ['bare', 'conditional', 'force'];
 const BLACKLIST_STATE_ORDER: BlacklistState[] = ['unchecked', 'blacklisted'];
@@ -108,16 +98,7 @@ function stateLabelKey(state: AppState, mode: Mode): string {
   return TARGET_LABEL_KEYS[state] || 'unchecked';
 }
 
-function bufToB64(buf: ArrayBuffer): string {
-  const bytes = new Uint8Array(buf);
-  let bin = '';
-  for (let i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i]!);
-  return btoa(bin);
-}
 
-function ksuGlobal(): any {
-  return (globalThis as any).ksu;
-}
 
 async function shellExec(cmd: string): Promise<{ stdout: string }> {
   try { return await exec(cmd); } catch { return { stdout: '' }; }
@@ -238,80 +219,6 @@ function buildOverlayHTML(): string {
   `;
 }
 
-class AppIconManager {
-  private observer: IntersectionObserver | null = null;
-
-  watchAll(): void {
-    if (!this.observer) {
-      this.observer = new IntersectionObserver((entries) => {
-        for (const e of entries) {
-          if (!e.isIntersecting) continue;
-          const el = e.target as HTMLElement;
-          const img = el.querySelector('.sp-icn') as HTMLImageElement | null;
-          const spin = el.querySelector('.sp-icn-spin') as HTMLElement | null;
-          const pkg = img?.dataset.package;
-          if (pkg && img && spin) {
-            this.fetch(pkg, img, spin);
-            this.observer?.unobserve(el);
-          }
-        }
-      }, { rootMargin: '100px', threshold: 0.1 });
-    }
-    document.querySelectorAll('.sp-icn-w').forEach(el => this.observer!.observe(el));
-    const ksu = ksuGlobal();
-    if (typeof ksu?.listPackages === 'function') {
-      document.querySelectorAll('.sp-icn-w').forEach(el => {
-        (el as HTMLElement).style.display = 'flex';
-      });
-    }
-  }
-
-  createElements(pkg: string): { wrap: HTMLDivElement; img: HTMLImageElement; spin: HTMLDivElement } {
-    const wrap = document.createElement('div');
-    wrap.className = 'sp-icn-w';
-    const spin = document.createElement('div');
-    spin.className = 'sp-icn-spin';
-    spin.dataset.package = pkg;
-    const img = document.createElement('img');
-    img.className = 'sp-icn';
-    img.dataset.package = pkg;
-    img.alt = '';
-    img.loading = 'lazy';
-    wrap.appendChild(spin);
-    wrap.appendChild(img);
-    return { wrap, img, spin };
-  }
-
-  private fetch(pkg: string, img: HTMLImageElement, spin: HTMLElement): void {
-    const done = () => { spin.style.display = 'none'; img.style.opacity = '1'; };
-    const fail = () => { img.src = themedFallbackIcon(); done(); };
-    img.onload = done;
-    img.onerror = fail;
-
-    const pm = (globalThis as any).$packageManager;
-    if (typeof pm?.getApplicationIcon === 'function') {
-      try {
-        const uri = pm.getApplicationIcon(pkg, 0, 0) as string;
-        if (uri) {
-          fetch(uri).then(r => r.arrayBuffer()).then(b => {
-            img.src = 'data:image/png;base64,' + bufToB64(b);
-          }).catch(fail);
-          return;
-        }
-      } catch {}
-    }
-    if (typeof ksuGlobal()?.getPackagesInfo === 'function') {
-      img.src = 'ksu://icon/' + pkg;
-      return;
-    }
-    fail();
-  }
-
-  destroy(): void {
-    this.observer?.disconnect();
-    this.observer = null;
-  }
-}
 
 export async function openTargetAppsManager() {
   const overlay = document.createElement('div');
@@ -467,212 +374,30 @@ export async function openTargetAppsManager() {
     closeTapMenu();
   });
 
+  const dialogsCtx: TargetDialogsContext = {
+    apps,
+    getDefaultMode: () => defaultMode,
+    setDefaultMode: (m: string) => { defaultMode = m; },
+    applyFilters,
+    refreshApps,
+    loading,
+    list,
+  };
+
   overlay.querySelector('#ta-regenerate')!.addEventListener('click', () => {
     closeTapMenu();
-    openRegenerateDialog();
+    openRegenerateDialog(dialogsCtx);
   });
 
   overlay.querySelector('#ta-mode')!.addEventListener('click', () => {
     closeTapMenu();
     if (ksmFormat === 'json') openTeesimModeDialog();
-    else if (supportsPerAppMode) openModeDialog();
+    else if (supportsPerAppMode) openModeDialog(dialogsCtx);
   });
 
-  function openTeesimModeDialog() {
-    const moddir = getModuleDir();
-    if (!moddir) return;
-    const scriptPath = shellEscape(moddir + '/features/teesim_mode.sh');
-    const d = document.createElement('md-dialog');
-    d.innerHTML = `
-      <div slot="headline">${t('ta_teesim_mode_title', 'Operation Mode')}</div>
-      <div slot="content" class="ta-mode-content">
-        <p class="supporting-text ta-mode-desc">${t('ta_teesim_mode_desc', 'Applies to all apps in the TEESimulator default profile')}</p>
-        <md-outlined-segmented-button-set id="ta-teesim-mode-set">
-          <md-outlined-segmented-button value="patch" selected label="${t('ta_teesim_mode_patch', 'Patch')}"></md-outlined-segmented-button>
-          <md-outlined-segmented-button value="generation" label="${t('ta_teesim_mode_generation', 'Generation')}"></md-outlined-segmented-button>
-        </md-outlined-segmented-button-set>
-      </div>
-      <div slot="actions">
-        <md-text-button class="dialog-action-close">${t('dialog_cancel', 'Cancel')}</md-text-button>
-        <md-filled-button id="ta-teesim-mode-apply">${t('dialog_apply', 'Apply')}</md-filled-button>
-      </div>
-    `;
-    document.body.appendChild(d);
-    d.addEventListener('close', () => document.body.removeChild(d));
 
-    let _touched = false;
-    exec(`sh ${scriptPath} --get 2>/dev/null || echo patch`).then(({ stdout }) => {
-      if (_touched) return;
-      const cur = stdout.trim();
-      if (cur === 'patch' || cur === 'generation') {
-        d.querySelectorAll('#ta-teesim-mode-set md-outlined-segmented-button').forEach(b => {
-          (b as HTMLElement & { selected: boolean }).selected = b.getAttribute('value') === cur;
-        });
-      }
-    }).catch(() => {});
 
-    d.querySelectorAll('#ta-teesim-mode-set md-outlined-segmented-button').forEach(b => {
-      b.addEventListener('click', () => { _touched = true; });
-    });
-    const applyBtn = d.querySelector('#ta-teesim-mode-apply') as HTMLElement & { disabled: boolean };
-    applyBtn.addEventListener('click', async () => {
-      if (applyBtn.disabled) return;
-      let mode = 'patch';
-      d.querySelectorAll('#ta-teesim-mode-set md-outlined-segmented-button').forEach(b => {
-        if ((b as HTMLElement & { selected: boolean }).selected) mode = b.getAttribute('value') || 'patch';
-      });
-      applyBtn.disabled = true;
-      try {
-        const { code, stderr } = await exec(`sh ${scriptPath} --set ${shellEscape(mode)}`);
-        if (code !== 0) {
-          showToast(stderr.trim() || t('simple_toast_error', 'Failed'), { icon: 'error', type: 'error', autoCloseDelay: 3000 });
-          applyBtn.disabled = false;
-          return;
-        }
-        showToast(t('ta_teesim_mode_saved', 'Operation mode saved'), { icon: 'check_circle', type: 'success', autoCloseDelay: 2500 });
-        d.close();
-      } catch {
-        showToast(t('simple_toast_error', 'Failed'), { icon: 'error', type: 'error', autoCloseDelay: 3000 });
-        applyBtn.disabled = false;
-      }
-    });
-    d.querySelector('.dialog-action-close')!.addEventListener('click', () => d.close());
-    d.show();
-    paintSeg(d);
-  }
 
-  function paintSeg(root: HTMLElement): void {
-    const rootStyle = document.documentElement.style;
-    const hex: Record<string, [string, string]> = {
-      bare: [rootStyle.getPropertyValue('--md-sys-color-primary').trim(), rootStyle.getPropertyValue('--md-sys-color-on-primary').trim()],
-      conditional: [rootStyle.getPropertyValue('--md-sys-color-tertiary').trim(), rootStyle.getPropertyValue('--md-sys-color-on-tertiary').trim()],
-      force: [rootStyle.getPropertyValue('--md-sys-color-error').trim(), rootStyle.getPropertyValue('--md-sys-color-on-error').trim()],
-      patch: [rootStyle.getPropertyValue('--md-sys-color-primary').trim(), rootStyle.getPropertyValue('--md-sys-color-on-primary').trim()],
-      generation: [rootStyle.getPropertyValue('--md-sys-color-error').trim(), rootStyle.getPropertyValue('--md-sys-color-on-error').trim()],
-    };
-    const inject = (btn: Element) => {
-      const sr = btn.shadowRoot;
-      if (!sr) { requestAnimationFrame(() => inject(btn)); return; }
-      const val = btn.getAttribute('value');
-      if (!val) return;
-      const h = hex[val];
-      if (!h || !h[0] || !h[1]) return;
-      const [bg, fg] = h;
-      const sheet = new CSSStyleSheet();
-      sheet.replaceSync(`.md3-segmented-button--selected{background-color:${bg}}.md3-segmented-button.md3-segmented-button--selected:enabled .md3-segmented-button__label-text{color:${fg}}.md3-segmented-button.md3-segmented-button--selected:enabled:hover .md3-segmented-button__label-text{color:${fg}}.md3-segmented-button.md3-segmented-button--selected:enabled:focus .md3-segmented-button__label-text{color:${fg}}.md3-segmented-button.md3-segmented-button--selected:enabled:active .md3-segmented-button__label-text{color:${fg}}.md3-segmented-button--selected .md3-segmented-button__icon{color:${fg}}.md3-segmented-button--selected .md3-segmented-button__checkmark-path{stroke:${fg}}.md3-segmented-button--selected:hover .md3-segmented-button__checkmark-path{stroke:${fg}}.md3-segmented-button--selected:focus .md3-segmented-button__checkmark-path{stroke:${fg}}.md3-segmented-button--selected:active .md3-segmented-button__checkmark-path{stroke:${fg}}`);
-      sr.adoptedStyleSheets = [...sr.adoptedStyleSheets, sheet];
-    };
-    root.querySelectorAll('md-outlined-segmented-button').forEach(inject);
-
-    const set = root.querySelector('md-outlined-segmented-button-set');
-    if (set) {
-      const injectFlex = () => {
-        const sr = set.shadowRoot;
-        if (!sr) { requestAnimationFrame(injectFlex); return; }
-        const s = new CSSStyleSheet();
-        s.replaceSync('::slotted(md-outlined-segmented-button){flex:1;min-width:0}');
-        sr.adoptedStyleSheets = [...sr.adoptedStyleSheets, s];
-      };
-      injectFlex();
-    }
-  }
-
-  function openModeDialog() {
-    const d = document.createElement('md-dialog');
-    d.innerHTML = `
-      <div slot="headline">${t('ta_mode_settings', 'Default Mode')}</div>
-      <div slot="content" class="ta-mode-content">
-        <p class="supporting-text ta-mode-desc">${t('ta_mode_desc', 'Controls the default mode suffix added to new app targets in Tricky Store')}</p>
-        <md-outlined-segmented-button-set>
-          <md-outlined-segmented-button value="bare"${defaultMode === 'bare' ? ' selected' : ''} label="${t('ta_mode_bare', 'Auto')}"></md-outlined-segmented-button>
-          <md-outlined-segmented-button value="conditional"${defaultMode === 'conditional' ? ' selected' : ''} label="? ${t('ta_mode_conditional', 'Leaf')}"></md-outlined-segmented-button>
-          <md-outlined-segmented-button value="force"${defaultMode === 'force' ? ' selected' : ''} label="! ${t('ta_mode_force', 'Gen')}"></md-outlined-segmented-button>
-        </md-outlined-segmented-button-set>
-        <div class="list-item list-item--toggle">
-          <div class="li-icon"><md-icon aria-hidden="true">compare_arrows</md-icon></div>
-          <div class="list-item-content">
-            <div class="toggle-text">${t('ta_mode_override_label', 'Override existing')}</div>
-            <span class="supporting-text">${t('ta_mode_override_desc', 'Apply this mode to all currently selected apps')}</span>
-          </div>
-          <div class="spacer"></div>
-          <md-switch icons id="ta-mode-do-override"></md-switch>
-        </div>
-      </div>
-      <div slot="actions">
-        <md-text-button class="dialog-action-close">${t('dialog_cancel', 'Cancel')}</md-text-button>
-        <md-filled-button id="ta-mode-apply">${t('dialog_apply', 'Apply')}</md-filled-button>
-      </div>
-    `;
-    document.body.appendChild(d);
-    d.addEventListener('close', () => document.body.removeChild(d));
-
-    let _mode = defaultMode;
-    d.querySelectorAll('md-outlined-segmented-button').forEach(b => {
-      b.addEventListener('click', () => { _mode = b.getAttribute('value') || 'bare'; });
-    });
-    d.querySelector('#ta-mode-apply')!.addEventListener('click', () => {
-      defaultMode = _mode;
-      cfgSet('target_default_mode', _mode);
-      const doOverride = (d.querySelector('#ta-mode-do-override') as any)?.selected;
-      let count = 0;
-      if (doOverride) {
-        for (const app of apps) {
-          if (app.state !== 'unchecked') {
-            app.state = _mode as AppState;
-            count++;
-          }
-        }
-        applyFilters();
-      }
-      d.close();
-      if (count > 0) {
-        showToast(t('ta_mode_applied_both', 'Default saved, {count} apps overridden').replace('{count}', String(count)), { icon: 'check_circle', type: 'success', autoCloseDelay: 2500 });
-      } else {
-        showToast(t('ta_default_saved', 'Default mode saved'), { icon: 'check_circle', type: 'success', autoCloseDelay: 2500 });
-      }
-    });
-    d.querySelector('.dialog-action-close')!.addEventListener('click', () => d.close());
-    d.show();
-    paintSeg(d);
-  }
-
-  function openRegenerateDialog() {
-    const d = document.createElement('md-dialog');
-    d.innerHTML = `
-      <div slot="headline">${t('ta_regenerate', 'Regenerate')}</div>
-      <div slot="content">
-        <p class="supporting-text">${t('ta_regenerate_confirm', 'This will re-scan all installed apps and fully rebuild target.txt. Custom per-app states will be overwritten. A backup will be saved.')}</p>
-      </div>
-      <div slot="actions">
-        <md-text-button class="dialog-action-close">${t('dialog_cancel', 'Cancel')}</md-text-button>
-        <md-filled-button id="ta-regenerate-confirm">${t('ta_regenerate', 'Regenerate')}</md-filled-button>
-      </div>
-    `;
-    document.body.appendChild(d);
-    d.addEventListener('close', () => document.body.removeChild(d));
-
-    d.querySelector('#ta-regenerate-confirm')!.addEventListener('click', async () => {
-      d.close();
-      loading.style.display = '';
-      list.style.display = 'none';
-
-      appendToOutput('[TARGET] Regenerating target.txt from all apps...');
-      try {
-        await exec(`sh ${shellEscape(getModuleDir() + '/features/target.sh')}`);
-        appendToOutput('[TARGET] Regeneration complete');
-        showToast(t('ta_regenerate_success', 'Target list regenerated'), { icon: 'check_circle', type: 'success', autoCloseDelay: 2500 });
-        await refreshApps();
-      } catch (e) {
-        appendToOutput(`[TARGET] Regeneration failed: ${e}`, true);
-      } finally {
-        loading.style.display = 'none';
-        list.style.display = '';
-      }
-    });
-
-    d.querySelector('.dialog-action-close')!.addEventListener('click', () => d.close());
-    d.show();
-  }
 
   overlay.querySelector('#ta-toggle-system')!.addEventListener('click', async () => {
     showSystemApps = !showSystemApps;
@@ -718,17 +443,29 @@ export async function openTargetAppsManager() {
       if (typeof ksu?.cacheAllPackageIcons === 'function') {
         try { ksu.cacheAllPackageIcons(48); } catch {}
       }
+      let perAppModes: boolean | undefined;
       try {
         const km = await fetchJson<KeystoreManagerJson>(API_URLS.KEYSTORE_MANAGER!, 0);
         const fmt = km?.format || '';
         ksmFormat = fmt === 'json' || fmt === 'toml' || fmt === 'txt' ? fmt : 'txt';
+        perAppModes = km?.perAppModes;
       } catch {
         ksmFormat = 'txt';
       }
-      supportsPerAppMode = ksmFormat === 'txt';
+      // Contract flag from keystore_manager.json; format sniff only as a
+      // fallback for stale info files written by older Specter versions.
+      supportsPerAppMode = perAppModes ?? (ksmFormat === 'txt');
       const modeItem = overlay.querySelector('#ta-mode') as HTMLElement | null;
       if (modeItem) {
         modeItem.hidden = ksmFormat === 'toml';
+        if (!modeItem.hidden && ksmFormat === 'json') {
+          try {
+            const { stdout } = await exec(`sh ${shellEscape(getModuleDir() + '/webroot/common/conflicts.sh')} status 2>/dev/null || echo '[]'`);
+            const entries = JSON.parse(stdout) as Array<{ key: string; prioritySpecter: boolean }>;
+            const te = entries.find(e => e.key === 'teesim');
+            if (te && !te.prioritySpecter) modeItem.hidden = true;
+          } catch {}
+        }
         const headline = modeItem.querySelector('[slot="headline"]');
         if (headline) {
           headline.textContent = ksmFormat === 'json'

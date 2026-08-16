@@ -33,13 +33,9 @@ case "$KSM_FORMAT" in
       cp "$KSM_TARGETS" "$BACKUP_DIR/target.txt.bak"
       log_d "FIRST_BOOT" "Backed up $KSM_TARGETS"
     fi
-    if [ -f "$KSM_LOCKED" ]; then
-      cp "$KSM_LOCKED" "$BACKUP_DIR/locked.xml.bak"
-      log_d "FIRST_BOOT" "Backed up $KSM_LOCKED"
-    fi
-    if [ -f "$KSM_SECURITY" ]; then
-      cp "$KSM_SECURITY" "$BACKUP_DIR/security_patch.txt.bak"
-      log_d "FIRST_BOOT" "Backed up $KSM_SECURITY"
+    if [ -f "$KSM_CONFIG" ]; then
+      cp "$KSM_CONFIG" "$BACKUP_DIR/security_patch.txt.bak"
+      log_d "FIRST_BOOT" "Backed up $KSM_CONFIG"
     fi
     ;;
 esac

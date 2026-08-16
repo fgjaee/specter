@@ -246,9 +246,7 @@ if (typeof window.ksu === 'undefined') {
         kernel: '6.1.57-android14-8',
         root: 'KernelSU',
         root_sol: 'KernelSU',
-        version: 'v1.7.3',
-        tee_status: 'normal',
-        tee_tier: 2,
+        version: 'v1.4.5',
         security_patch: '2026-04-05',
         build_patch: '2026-04-05',
         pif_model: 'Google Pixel 8 Pro XL Super Max Ultra Edition',
@@ -277,7 +275,8 @@ if (typeof window.ksu === 'undefined') {
         format: 'toml',
         dir: '/data/misc/keystore/omk',
         targets: '/data/misc/keystore/omk/injector.toml',
-        security: '/data/misc/keystore/omk/config.toml',
+        config: '/data/misc/keystore/omk/config.toml',
+        perAppModes: false,
       }), { status: 200, headers: { 'Content-Type': 'application/json' } }));
     }
 

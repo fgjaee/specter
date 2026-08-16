@@ -51,12 +51,12 @@ _zygisk_variant() {
   echo ""
 }
 
-_ts_prop() {
-  module_detect "tricky_store"
+_cleveres_prop() {
+  module_detect "cleverestricky"
 }
 
-_cleveres_prop() {
-  module_detect "${CLEVERES_MODULE##*/}"
+_ts_prop() {
+  module_detect "tricky_store"
 }
 
 _omk_prop() {
@@ -65,13 +65,4 @@ _omk_prop() {
 
 _teesim_prop() {
   module_detect "teesim"
-}
-
-# TrickyStore-layout TEESimulator / TEESimulator-RS only (locked.xml path).
-_is_teesimulator() {
-  case "$(_ts_prop)" in
-    *TEESimulator*) return 0 ;;
-  esac
-  [ -f "$TRICKY_DIR/spoof_build_vars" ] && return 0
-  return 1
 }

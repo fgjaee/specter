@@ -18,6 +18,8 @@ fi
 . "$_root/lib/props.sh"
 . "$_root/lib/keybox.sh"
 . "$_root/lib/teesim.sh"
+. "$_root/lib/keystore_toml.sh"
+. "$_root/lib/keystore_txt.sh"
 . "$_root/lib/keystore.sh"
 . "$_root/lib/conflicts.sh"
 

@@ -161,60 +161,9 @@ else
   log_w "KEYBOX" "Could not extract serial for revocation check"
 fi
 
-_install_teesimulator() {
-  log_d "KEYBOX" "TEE Simulator detected, generating locked.xml format"
-
-  _serial=$(decode_keybox_serial "$DECODE_FILE" 2>/dev/null || echo "unknown")
-  _random=$(hexdump -n 4 -e '4/4 "%08X"' /dev/urandom 2>/dev/null || echo "$$")
-  _ecdsa_block=$(sed -n '/<Key algorithm="ecdsa">/,/<\/Key>/p' "$DECODE_FILE" 2>/dev/null)
-  _rsa_block=$(sed -n '/<Key algorithm="rsa">/,/<\/Key>/p' "$DECODE_FILE" 2>/dev/null)
-
-  # Handle backup of existing locked.xml
-  if [ -f "$LOCKED_FILE" ] && [ ! -f "$LOCKED_BACKUP" ]; then
-    cp "$LOCKED_FILE" "$LOCKED_BACKUP"
-    log_i "KEYBOX" "Created backup of existing locked.xml"
-  fi
-
-  if [ -z "$_ecdsa_block" ]; then
-    log_d "KEYBOX" "No ECDSA key — writing placeholder locked.xml"
-    {
-      echo '<?xml version="1.0" encoding="UTF-8"?>'
-      echo '<AndroidAttestation>'
-      echo '<NumberOfKeyboxes>1</NumberOfKeyboxes>'
-      echo '<Keybox>'
-      echo '</Keybox>'
-      echo '</AndroidAttestation>'
-    } > "$LOCKED_FILE"
-    return
-  fi
-
-  {
-    echo '<?xml version="1.0" encoding="UTF-8"?>'
-    echo '<AndroidAttestation>'
-    echo '<NumberOfKeyboxes>1</NumberOfKeyboxes>'
-    echo "<Keybox DeviceID=\"$_serial\">"
-    printf '%s\n' "$_ecdsa_block"
-    echo "  <serial>${_serial}_${_random}</serial>"
-    [ -n "$_rsa_block" ] && printf '%s\n' "$_rsa_block"
-    echo '</Keybox>'
-    echo '</AndroidAttestation>'
-  } > "$LOCKED_FILE"
-  log_d "KEYBOX" "Locked XML written to $LOCKED_FILE"
-
-  unset _serial _random _ecdsa_block _rsa_block
-}
-
 _clear_keybox_id() {
   printf '%s' "" > "$CONFIG_DIR/val/keybox_private.val" 2>/dev/null || true
 }
-
-if _is_teesimulator; then
-    _install_teesimulator
-    _clear_keybox_id
-    ksm_install_keybox "$DECODE_FILE" copy
-    log_i "KEYBOX" "Keybox install complete"
-    exit 0
-fi
 
 ksm_install_keybox "$DECODE_FILE" || die "Failed to move decoded keybox to $KSM_KEYBOX"
 _clear_keybox_id

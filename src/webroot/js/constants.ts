@@ -30,7 +30,7 @@ export const CONTROL_TOGGLES: ToggleDef[] = [
   { id: 'toggle-adb_disabler', key: 'toggle_adb_disabler', default: '0', icon: 'usb_off', section: 'boot' },
   { id: 'toggle-action_gms', key: 'toggle_action_gms', icon: 'block', section: 'action' },
   { id: 'toggle-action_target', key: 'toggle_action_target', icon: 'list_alt', section: 'action' },
-  { id: 'toggle-action_security_patch', key: 'toggle_action_security_patch', icon: 'security_update_good', section: 'action' },
+  { id: 'toggle-action_security_patch', key: 'toggle_action_security_patch', default: '0', icon: 'security_update_good', section: 'action' },
   { id: 'toggle-action_pif', key: 'toggle_action_pif', icon: 'fingerprint', section: 'action' },
   { id: 'toggle-action_keybox', key: 'toggle_action_keybox', icon: 'vpn_key', section: 'action' },
   { id: 'toggle-background_auto_target', key: 'toggle_auto_target', icon: 'my_location', section: 'background' },
@@ -43,7 +43,7 @@ export const FEATURE_I18N_KEYS: Record<string, string> = {
   prop_handler: 'control_toggle_prop_handler',
   security_patch: 'control_toggle_action_security_patch',
   target: 'control_toggle_action_target',
-  boot_hash: 'prop_handler_boot_hash',
+  teesim_mode: 'ta_teesim_mode_title',
 };
 
 export function defaultSecurityPatch(): string {

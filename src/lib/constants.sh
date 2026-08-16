@@ -16,22 +16,14 @@ FALLBACK_KEYBOXES="Yuri/8"
 : "${ZYNEXT_DIR:=$MODULES_BASE/zygisksu}"
 : "${TARGET_FILE:=$TRICKY_DIR/keybox.xml}"
 : "${BACKUP_FILE:=$SPECTER_DIR/backup/keybox.xml.bak}"
-: "${LOCKED_FILE:=$TRICKY_DIR/locked.xml}"
-: "${LOCKED_BACKUP:=$SPECTER_DIR/backup/locked.xml.bak}"
 : "${TARGET_TXT:=$TRICKY_DIR/target.txt}"
 : "${SECURITY_PATCH_FILE:=$TRICKY_DIR/security_patch.txt}"
-: "${TEE_STATUS:=$SPECTER_DIR/tee_status}"
-: "${TEE_BHASH:=$SPECTER_DIR/tee_bhash}"
-: "${TEE_TIER:=$SPECTER_DIR/tee_tier}"
-: "${TEE_KEYMASTER_VER:=$SPECTER_DIR/tee_keymaster_version}"
-: "${TEE_CHALLENGE:=$SPECTER_DIR/tee_challenge}"
-: "${VBMETA_DIGEST:=$SPECTER_DIR/vbmeta_digest}"
 : "${HMA_DIR:=/data/user/0/org.frknkrc44.hma_oss/files}"
 : "${HMA_FILE:=$HMA_DIR/config.json}"
 : "${GMS_PROPS_FILE:=/data/system/gms_certified_props.json}"
 : "${BACKUP_DIR:=$SPECTER_DIR/backup}"
 
-# -- CleveresTricky (id=cleverestricky) legacy-compatible paths --
+# -- CleveresTricky (id=cleverestricky) --
 : "${CLEVERES_MODULE:=$MODULES_BASE/cleverestricky}"
 : "${CLEVERES_DIR:=/data/adb/cleverestricky}"
 : "${CLEVERES_KEYBOX:=$CLEVERES_DIR/keybox.xml}"
@@ -58,9 +50,9 @@ FIXED_TARGETS="android $GMS_APPS"
 GMS_KILL_LIST="$GMS_APPS com.google.android.gms.persistent com.google.android.gms.unstable com.google.android.rkpdapp com.android.chrome com.google.android.googlequicksearchbox"
 TOOL_APPS="bin.mt.plus bin.mt.plus.canary com.omarea.vtools moe.shizuku.privileged.api com.estrongs.android.pop com.coolapk.market com.sevtinge.hyperceiler com.coderstory.toolkit"
 
-# Proven working CleveresTricky RCS-safe scope. Messages and Google IMS must stay
-# on the genuine Keystore path; Key Attestation is intentionally inside the
-# Cleveres scope so its checks reflect the configured attestation path.
+# Proven working CleveresTricky RCS-safe scope. Messages and Google IMS stay on
+# the genuine Android Keystore path. Key Attestation stays inside the Cleveres
+# scope so its checks exercise the configured attestation path.
 CLEVERES_RCS_SAFE_TARGETS="android com.android.vending com.google.android.gsf com.google.android.gms com.google.android.contactkeys com.google.android.safetycore com.google.android.apps.walletnfcrel io.github.vvb2060.keyattestation"
 CLEVERES_RCS_PROTECTED_TARGETS="com.google.android.apps.messaging com.google.android.ims"
 

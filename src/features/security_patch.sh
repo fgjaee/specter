@@ -46,6 +46,12 @@ _is_intentional_spoofed_patch() {
         auto|latest) return 0 ;;
       esac
       ;;
+    json)
+      # TEESimulator WebUI patch tokens — never clobber them.
+      case "$1" in
+        today|no|harvested|system_property) return 0 ;;
+      esac
+      ;;
   esac
   return 1
 }
@@ -163,7 +169,7 @@ case "${1:-}" in
       *) die "security_patch.sh --set requires a YYYY-MM-DD date" ;;
     esac
     ksm_available || die "No keystore manager (Tricky Store / TEESimulator / OhMyKeymint) data directory found"
-    ksm_set_security_patch "$2" || die "Failed to write $KSM_SECURITY"
+    ksm_set_security_patch "$2" || die "Failed to write $KSM_CONFIG"
     log_i "SECURITY_PATCH" "Security patch manually set to $2"
     exit 0
     ;;
@@ -187,6 +193,6 @@ if ! _resolve_action_patch; then
   exit 0
 fi
 
-ksm_set_security_patch "$_patch" || die "Failed to write $KSM_SECURITY"
+ksm_set_security_patch "$_patch" || die "Failed to write $KSM_CONFIG"
 log_i "SECURITY_PATCH" "Applied security patch from $_patch_source: $_patch"
 exit 0

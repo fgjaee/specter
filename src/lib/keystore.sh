@@ -1,5 +1,19 @@
 # shellcheck shell=sh
 # Enabled backends only: CleveresTricky → teesim → Tricky Store / TEESimulator-RS → OMK.
+#
+# Keystore manager contract (set by detect_keystore_manager):
+#   KSM              backend id: cleveres | teesim | trickystore | omk | none
+#   KSM_NAME         display name from the module's module.prop
+#   KSM_DIR          the backend's data directory
+#   KSM_KEYBOX       keybox file
+#   KSM_TARGETS      target/app list file
+#   KSM_CONFIG       main config file: security patch level lives here; for
+#                    toml also the trust fields, for json also the profiles
+#   KSM_FORMAT       file format of targets/config: txt | json | toml
+#   KSM_PER_APP_MODES  1 when per-app !/? suffixes are meaningful (txt only)
+#
+# Feature scripts and the WebUI consume only this contract; nothing outside
+# this file (plus the per-format helpers) knows backend-specific paths.
 
 _ksm_auto_pick() {
   if module_enabled "${CLEVERES_MODULE##*/}" >/dev/null; then
@@ -64,9 +78,9 @@ detect_keystore_manager() {
       KSM_DIR="$CLEVERES_DIR"
       KSM_KEYBOX="$CLEVERES_KEYBOX"
       KSM_TARGETS="$CLEVERES_TARGETS"
-      KSM_SECURITY="$CLEVERES_SECURITY"
-      KSM_LOCKED=""
+      KSM_CONFIG="$CLEVERES_SECURITY"
       KSM_FORMAT="txt"
+      KSM_PER_APP_MODES=0
       ;;
     trickystore)
       KSM_NAME=$(_ts_prop)
@@ -74,9 +88,9 @@ detect_keystore_manager() {
       KSM_DIR="$TRICKY_DIR"
       KSM_KEYBOX="$TARGET_FILE"
       KSM_TARGETS="$TARGET_TXT"
-      KSM_SECURITY="$SECURITY_PATCH_FILE"
-      KSM_LOCKED="$LOCKED_FILE"
+      KSM_CONFIG="$SECURITY_PATCH_FILE"
       KSM_FORMAT="txt"
+      KSM_PER_APP_MODES=1
       ;;
     teesim)
       KSM_NAME=$(_teesim_prop)
@@ -84,31 +98,31 @@ detect_keystore_manager() {
       KSM_DIR="$TEESIM_DIR"
       KSM_KEYBOX="$TEESIM_KEYBOX"
       KSM_TARGETS="$TEESIM_CONFIG"
-      KSM_SECURITY="$TEESIM_CONFIG"
-      KSM_LOCKED=""
+      KSM_CONFIG="$TEESIM_CONFIG"
       KSM_FORMAT="json"
+      KSM_PER_APP_MODES=0
       ;;
     omk)
       KSM_NAME="OhMyKeymint"
       KSM_DIR="$OMK_DIR"
       KSM_KEYBOX="$OMK_KEYBOX"
       KSM_TARGETS="$OMK_INJECTOR"
-      KSM_SECURITY="$OMK_CONFIG"
-      KSM_LOCKED=""
+      KSM_CONFIG="$OMK_CONFIG"
       KSM_FORMAT="toml"
+      KSM_PER_APP_MODES=0
       ;;
     *)
       KSM_NAME=""
       KSM_DIR=""
       KSM_KEYBOX=""
       KSM_TARGETS=""
-      KSM_SECURITY=""
-      KSM_LOCKED=""
+      KSM_CONFIG=""
       KSM_FORMAT=""
+      KSM_PER_APP_MODES=0
       ;;
   esac
 
-  export KSM KSM_NAME KSM_DIR KSM_KEYBOX KSM_TARGETS KSM_SECURITY KSM_LOCKED KSM_FORMAT
+  export KSM KSM_NAME KSM_DIR KSM_KEYBOX KSM_TARGETS KSM_CONFIG KSM_FORMAT KSM_PER_APP_MODES
   unset _dkm_override
 }
 
@@ -117,7 +131,6 @@ ksm_available() {
 }
 
 # CleveresTricky ignores target.txt while its global_mode flag exists.
-# Reads are still safe, but Specter must not pretend target writes are active.
 ksm_target_management_available() {
   [ "$KSM" != "cleveres" ] || [ ! -f "$CLEVERES_GLOBAL_MODE" ]
 }
@@ -173,7 +186,8 @@ ksm_read_targets() {
 
 ksm_read_targets_raw() {
   case "$KSM_FORMAT" in
-    json|toml) ksm_read_targets ;;
+    json) _teesim_read_apps "$KSM_TARGETS" default | grep -vE '^(uid:[0-9]+|[^[:space:]]+@[0-9]+)$' ;;
+    toml) ksm_read_targets ;;
     *) [ -f "$KSM_TARGETS" ] && cat "$KSM_TARGETS" ;;
   esac
 }
@@ -213,24 +227,55 @@ ksm_commit_targets() {
   unset _kct_src
 }
 
+ksm_commit_targets_merge() {
+  _kcm_src="$1"
+  case "$KSM_FORMAT" in
+    txt)
+      if [ -f "$KSM_TARGETS" ]; then
+        _ksm_txt_merge "$_kcm_src" || { unset _kcm_src; return 1; }
+      else
+        ksm_commit_targets "$_kcm_src" || { unset _kcm_src; return 1; }
+      fi
+      ;;
+    json) _teesim_commit_apps "$KSM_TARGETS" "$_kcm_src" || { unset _kcm_src; return 1; } ;;
+    toml) ksm_commit_targets "$_kcm_src" || { unset _kcm_src; return 1; } ;;
+  esac
+  unset _kcm_src
+}
+
 ksm_get_security_patch() {
   case "$KSM_FORMAT" in
     json)
-      _teesim_get_boot_patch "$KSM_SECURITY"
+      _teesim_get_boot_patch "$KSM_CONFIG"
       ;;
     toml)
-      [ -f "$KSM_SECURITY" ] || return 1
-      grep -E '^[ ]*security_patch[ ]*=' "$KSM_SECURITY" 2>/dev/null | head -1 |
+      [ -f "$KSM_CONFIG" ] || return 1
+      grep -E '^[ ]*security_patch[ ]*=' "$KSM_CONFIG" 2>/dev/null | head -1 |
         sed 's/.*=[ ]*"\([^"]*\)".*/\1/'
       ;;
     *)
-      [ -f "$KSM_SECURITY" ] || return 1
-      _kgsp=$(grep -E '^boot=' "$KSM_SECURITY" 2>/dev/null | head -1 | cut -d= -f2) || _kgsp=""
-      [ -n "$_kgsp" ] || _kgsp=$(grep -E '^all=' "$KSM_SECURITY" 2>/dev/null | head -1 | cut -d= -f2) || _kgsp=""
-      if [ -z "$_kgsp" ]; then
-        _kgsp_compact=$(grep -E '^[0-9]{8}$' "$KSM_SECURITY" 2>/dev/null | head -1) || _kgsp_compact=""
-        [ -n "$_kgsp_compact" ] && _kgsp=$(printf '%s' "$_kgsp_compact" | sed 's/^\(....\)\(..\)\(..\)$/\1-\2-\3/')
+      [ -f "$KSM_CONFIG" ] || return 1
+      # Older Cleveres builds may contain one compact YYYYMMDD value.
+      if [ "$KSM" = "cleveres" ]; then
+        _kgsp_compact=$(head -1 "$KSM_CONFIG" 2>/dev/null | tr -d '[:space:]')
+        case "$_kgsp_compact" in
+          [0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9])
+            printf '%s-%s-%s\n' "${_kgsp_compact%????}" "$(printf '%s' "$_kgsp_compact" | cut -c5-6)" "${_kgsp_compact#??????}"
+            unset _kgsp_compact
+            return 0
+            ;;
+        esac
         unset _kgsp_compact
+      fi
+      _kgsp=$(awk '
+        /^[[:space:]]*\[/ { exit }
+        /^[[:space:]]*boot=/ { sub(/^[[:space:]]*boot=/,""); sub(/[[:space:]]*$/,""); if ($0 != "") { print; exit } }
+      ' "$KSM_CONFIG") || _kgsp=""
+      if [ -z "$_kgsp" ]; then
+        _kgsp=$(awk '
+          /^[[:space:]]*\[/ { exit }
+          /^[[:space:]]*all=/ { sub(/^[[:space:]]*all=/,""); sub(/[[:space:]]*$/,""); if ($0 != "") { print; exit } }
+        ' "$KSM_CONFIG") || _kgsp=""
       fi
       [ -n "$_kgsp" ] || { unset _kgsp; return 1; }
       printf '%s\n' "$_kgsp"
@@ -243,13 +288,18 @@ ksm_set_security_patch() {
   _ksp_date="$1"
   case "$KSM_FORMAT" in
     json)
-      _teesim_set_patch "$KSM_SECURITY" "$_ksp_date" || {
+      _teesim_set_patch "$KSM_CONFIG" "$_ksp_date" || {
         unset _ksp_date
         return 1
       }
       ;;
     toml)
-      _toml_set_trust_key "$KSM_SECURITY" "security_patch" "\"$_ksp_date\"" || {
+      _ksm_wait_file "$KSM_CONFIG" 10 || {
+        log_w "KSM" "OMK config.toml not available yet, skip security patch"
+        unset _ksp_date
+        return 1
+      }
+      _toml_set_trust_key "$KSM_CONFIG" "security_patch" "\"$_ksp_date\"" || {
         unset _ksp_date
         return 1
       }
@@ -261,16 +311,33 @@ ksm_set_security_patch() {
           head -1 | cut -d= -f2 | tr -d '[:space:]') || _ksp_vendor=""
       fi
       [ -n "$_ksp_vendor" ] || _ksp_vendor="$_ksp_date"
-      if [ "$KSM" = "cleveres" ]; then
-        printf 'system=%s\nboot=%s\nvendor=%s\n' "$_ksp_date" "$_ksp_date" "$_ksp_vendor" \
-          > "$KSM_SECURITY" || { unset _ksp_date _ksp_vendor; return 1; }
+      _ksp_yyyymm=$(printf '%s' "$_ksp_date" | cut -d'-' -f1-2 | tr -d '-')
+      _ksp_tmp="${KSM_CONFIG}.new.$$"
+      {
+        if [ "$KSM" = "cleveres" ]; then
+          printf 'system=%s\nboot=%s\nvendor=%s\n' "$_ksp_date" "$_ksp_date" "$_ksp_vendor"
+        else
+          printf 'system=%s\nboot=%s\nvendor=%s\n' "$_ksp_yyyymm" "$_ksp_date" "$_ksp_vendor"
+        fi
+        if [ -f "$KSM_CONFIG" ]; then
+          awk '/^[[:space:]]*\[/ { emit = 1 } emit { print }' "$KSM_CONFIG"
+        fi
+      } > "$_ksp_tmp"
+      if [ -f "$KSM_CONFIG" ]; then
+        _ksm_inplace_from "$_ksp_tmp" "$KSM_CONFIG" || {
+          rm -f "$_ksp_tmp"
+          unset _ksp_date _ksp_vendor _ksp_yyyymm _ksp_tmp
+          return 1
+        }
+        rm -f "$_ksp_tmp"
       else
-        _ksp_yyyymm=$(printf '%s' "$_ksp_date" | cut -d'-' -f1-2 | tr -d '-')
-        printf 'system=%s\nboot=%s\nvendor=%s\n' "$_ksp_yyyymm" "$_ksp_date" "$_ksp_vendor" \
-          > "$KSM_SECURITY" || { unset _ksp_date _ksp_vendor _ksp_yyyymm; return 1; }
-        unset _ksp_yyyymm
+        mv -f "$_ksp_tmp" "$KSM_CONFIG" || {
+          rm -f "$_ksp_tmp"
+          unset _ksp_date _ksp_vendor _ksp_yyyymm _ksp_tmp
+          return 1
+        }
       fi
-      unset _ksp_vendor
+      unset _ksp_vendor _ksp_yyyymm _ksp_tmp
       ;;
   esac
   unset _ksp_date
@@ -293,7 +360,7 @@ ksm_set_mode() {
 ksm_get_trust_field() {
   _kgt_key="$1"
   case "$KSM_FORMAT" in
-    toml) _toml_get_trust_key "$KSM_SECURITY" "$_kgt_key" ;;
+    toml) _toml_get_trust_key "$KSM_CONFIG" "$_kgt_key" ;;
     *) printf '' ;;
   esac
   unset _kgt_key
@@ -303,12 +370,17 @@ ksm_set_trust_field() {
   _kst_key="$1" _kst_val="$2"
   case "$KSM_FORMAT" in
     toml)
+      _ksm_wait_file "$KSM_CONFIG" 10 || {
+        log_w "KSM" "OMK config.toml not available yet, skip trust field"
+        unset _kst_key _kst_val
+        return 1
+      }
       case "$_kst_key" in
         os_version)
-          _toml_set_trust_key "$KSM_SECURITY" "os_version" "$_kst_val"
+          _toml_set_trust_key "$KSM_CONFIG" "os_version" "$_kst_val"
           ;;
         vb_key|vb_hash)
-          _toml_set_trust_key "$KSM_SECURITY" "$_kst_key" "\"$_kst_val\""
+          _toml_set_trust_key "$KSM_CONFIG" "$_kst_key" "\"$_kst_val\""
           ;;
       esac
       ksm_reload
@@ -351,139 +423,4 @@ ksm_install_keybox() {
       ;;
   esac
   unset _kik_src _kik_mode
-}
-
-# -- TOML helpers (private) --
-# Deliberately minimal: only understands the two shapes Specter needs to
-# read/write (a top-level `scoop = [...]` array and a `KEY = VALUE` line
-# inside a `[trust]` table), not the full TOML grammar.
-
-_toml_read_scoop() {
-  _trs_file="$1"
-  [ -f "$_trs_file" ] || return 0
-  awk '
-    BEGIN { capture = 0 }
-    {
-      line = $0
-      if (!capture) {
-        if (line ~ /^[ ]*scoop[ ]*=/) {
-          capture = 1
-          sub(/^[ ]*scoop[ ]*=[ ]*/, "", line)
-        } else {
-          next
-        }
-      }
-      while (match(line, /"[^"]*"/)) {
-        print substr(line, RSTART + 1, RLENGTH - 2)
-        line = substr(line, RSTART + RLENGTH)
-      }
-      if (line ~ /\]/) capture = 0
-    }
-  ' "$_trs_file"
-}
-
-# stdin packages → rewrite scoop in FILE; leave other keys alone.
-_toml_write_scoop() {
-  _tws_file="$1"
-  [ -f "$_tws_file" ] || { unset _tws_file; return 1; }
-
-  _tws_block="${_tws_file}.block.$$"
-  {
-    printf 'scoop = [\n'
-    while IFS= read -r _tws_pkg || [ -n "$_tws_pkg" ]; do
-      [ -z "$_tws_pkg" ] && continue
-      printf '  "%s",\n' "$_tws_pkg"
-    done
-    printf ']\n'
-  } > "$_tws_block"
-
-  _tws_tmp="${_tws_file}.new.$$"
-
-  if grep -Eq '^[ ]*scoop[ ]*=' "$_tws_file"; then
-    awk -v blockfile="$_tws_block" '
-      function emit(   line) { while ((getline line < blockfile) > 0) print line; close(blockfile) }
-      {
-        if (capture) { if ($0 ~ /\]/) capture = 0; next }
-        if ($0 ~ /^[ ]*scoop[ ]*=/) {
-          emit()
-          if ($0 !~ /\]/) capture = 1
-          next
-        }
-        print
-      }
-    ' "$_tws_file" > "$_tws_tmp"
-  elif grep -Eq '^[ ]*\[' "$_tws_file"; then
-    awk -v blockfile="$_tws_block" '
-      function emit(   line) { while ((getline line < blockfile) > 0) print line; close(blockfile) }
-      BEGIN { injected = 0 }
-      {
-        if (!injected && $0 ~ /^[ ]*\[/) { emit(); injected = 1 }
-        print
-      }
-    ' "$_tws_file" > "$_tws_tmp"
-  else
-    cat "$_tws_block" > "$_tws_tmp"
-    if [ -s "$_tws_file" ]; then
-      printf '\n' >> "$_tws_tmp"
-      cat "$_tws_file" >> "$_tws_tmp"
-    fi
-  fi
-
-  _ksm_inplace_from "$_tws_tmp" "$_tws_file" || {
-    rm -f "$_tws_tmp" "$_tws_block"
-    unset _tws_file _tws_block _tws_tmp _tws_pkg
-    return 1
-  }
-  rm -f "$_tws_tmp" "$_tws_block"
-  unset _tws_file _tws_block _tws_tmp _tws_pkg
-}
-
-# VALUE must already be TOML-shaped (quoted string, bare number/bool, …).
-_toml_set_trust_key() {
-  _tsk_file="$1" _tsk_key="$2" _tsk_val="$3"
-  [ -f "$_tsk_file" ] || { unset _tsk_file _tsk_key _tsk_val; return 1; }
-
-  _tsk_tmp="${_tsk_file}.new.$$"
-
-  if grep -Eq '^\[trust\]' "$_tsk_file"; then
-    awk -v key="$_tsk_key" -v val="$_tsk_val" '
-      BEGIN { in_trust = 0; done = 0 }
-      /^\[/ {
-        if (in_trust && !done) { print key " = " val; done = 1 }
-        in_trust = ($0 == "[trust]")
-        print
-        next
-      }
-      {
-        if (in_trust && !done && $0 ~ ("^[ ]*" key "[ ]*=")) {
-          print key " = " val
-          done = 1
-          next
-        }
-        print
-      }
-      END {
-        if (in_trust && !done) print key " = " val
-      }
-    ' "$_tsk_file" > "$_tsk_tmp"
-  else
-    cat "$_tsk_file" > "$_tsk_tmp"
-    printf '\n[trust]\n%s = %s\n' "$_tsk_key" "$_tsk_val" >> "$_tsk_tmp"
-  fi
-
-  _ksm_inplace_from "$_tsk_tmp" "$_tsk_file" || {
-    rm -f "$_tsk_tmp"
-    unset _tsk_file _tsk_key _tsk_val _tsk_tmp
-    return 1
-  }
-  rm -f "$_tsk_tmp"
-  unset _tsk_file _tsk_key _tsk_val _tsk_tmp
-}
-
-_toml_get_trust_key() {
-  _tgk_file="$1" _tgk_key="$2"
-  [ -f "$_tgk_file" ] || return 1
-  grep -E '^[ ]*'"$_tgk_key"'[ ]*=' "$_tgk_file" 2>/dev/null \
-    | head -1 | sed 's/.*=[ ]*//; s/^"//; s/"$//; s/[[:space:]]*$//'
-  unset _tgk_file _tgk_key
 }

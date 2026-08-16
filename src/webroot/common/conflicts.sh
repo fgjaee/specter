@@ -1,8 +1,6 @@
 #!/system/bin/sh
 MODULE_ROOT="${0%/*}"
 MODULE_ROOT="${MODULE_ROOT%/webroot/common}"
-MODDIR="$MODULE_ROOT"
-: "${MODDIR}"
 . "$MODULE_ROOT/lib/constants.sh"
 . "$MODULE_ROOT/lib/common.sh"
 

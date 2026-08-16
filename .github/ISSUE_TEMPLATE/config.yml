@@ -4,5 +4,5 @@ contact_links:
     url: https://t.me/dpejoh0
     about: Ask setup and usage questions in the Telegram group, not in issues.
   - name: Translations
-    url: https://crowdin.com/project/specter
+    url: https://crowdin.com/project/specter-module
     about: Contribute translations via Crowdin.

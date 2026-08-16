@@ -67,14 +67,6 @@ else
   ui_print "- Play Integrity Fix: none"
 fi
 
-# TEE status
-_tee_val=$(grep -E '^(teeBroken|tee_broken)=' "$TEE_STATUS" 2>/dev/null | cut -d= -f2)
-case "$_tee_val" in
-  true)  ui_print "- TEE: broken" ;;
-  false) ui_print "- TEE: normal" ;;
-esac
-unset _tee_val
-
 ui_print ""
 
 unset _zygisk_name
@@ -108,7 +100,6 @@ echo "{\"MODDIR\": \"$MODPATH\", \"SPECTER_DIR\": \"$SPECTER_DIR\"}" > "$MODPATH
 # Backup module.prop for description override system
 cp "$MODPATH/module.prop" "$MODPATH/module.prop.bak"
 
-rm -f "$SPECTER_DIR/tee_status" "$SPECTER_DIR/tee_bhash" "$SPECTER_DIR/tee_tier" 2>/dev/null || true
 unset _pif_name
 
 # Ensure backup dir exists for first-boot snapshot

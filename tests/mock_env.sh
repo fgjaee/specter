@@ -98,21 +98,15 @@ source_libs() {
   . "$REPO_ROOT/src/lib/props.sh" 2>/dev/null
   . "$REPO_ROOT/src/lib/keybox.sh" 2>/dev/null
   . "$REPO_ROOT/src/lib/teesim.sh" 2>/dev/null
+  . "$REPO_ROOT/src/lib/keystore_toml.sh" 2>/dev/null
+  . "$REPO_ROOT/src/lib/keystore_txt.sh" 2>/dev/null
   . "$REPO_ROOT/src/lib/keystore.sh" 2>/dev/null
   . "$REPO_ROOT/src/lib/conflicts.sh" 2>/dev/null
   SPECTER_DIR="$TEST_ROOT/specter"
   GMS_PROPS_FILE="$TEST_ROOT/gms_certified_props.json"
   CONFLICT_BACKUP_FILE="$SPECTER_DIR/conflict_backups.txt"
-  VBMETA_DIGEST="$SPECTER_DIR/vbmeta_digest"
-  TEE_STATUS="$SPECTER_DIR/tee_status"
-  TEE_BHASH="$SPECTER_DIR/tee_hash"
-  # constants.sh only sets these on first use (:=), so re-derive them from
-  # the current backend dirs on every call — otherwise they stick to
-  # whichever TEST_ROOT was active the first time source_libs ran.
   TARGET_FILE="$TRICKY_DIR/keybox.xml"
   BACKUP_FILE="$SPECTER_DIR/backup/keybox.xml.bak"
-  LOCKED_FILE="$TRICKY_DIR/locked.xml"
-  LOCKED_BACKUP="$SPECTER_DIR/backup/locked.xml.bak"
   TARGET_TXT="$TRICKY_DIR/target.txt"
   SECURITY_PATCH_FILE="$TRICKY_DIR/security_patch.txt"
   BACKUP_DIR="$SPECTER_DIR/backup"
@@ -128,6 +122,7 @@ source_libs() {
   TEESIM_DIR="$TEST_ROOT/teesim"
   TEESIM_CONFIG="$TEESIM_DIR/config.json"
   TEESIM_KEYBOX="$TEESIM_DIR/keybox.xml"
+  export CLEVERES_MODULE CLEVERES_DIR CLEVERES_KEYBOX CLEVERES_TARGETS CLEVERES_SECURITY CLEVERES_GLOBAL_MODE
 }
 
 # Fakes an installed module by writing $MODULES_BASE/<id>/module.prop.
@@ -140,8 +135,7 @@ mk_module() {
 
 run_feature() {
   _feature="$1"; shift
-  PATH="$BIN_DIR:/usr/bin:/bin" MODDIR="$TEST_ROOT" SPECTER_DIR="$SPECTER_DIR" CONFIG_DIR="$CONFIG_DIR" TRICKY_DIR="$TRICKY_DIR" \
-    CLEVERES_DIR="$CLEVERES_DIR" CLEVERES_MODULE="$CLEVERES_MODULE" sh "$REPO_ROOT/src/features/$_feature" "$@" 2>&1
+  PATH="$BIN_DIR:/usr/bin:/bin" MODDIR="$TEST_ROOT" SPECTER_DIR="$SPECTER_DIR" CONFIG_DIR="$CONFIG_DIR" TRICKY_DIR="$TRICKY_DIR" sh "$REPO_ROOT/src/features/$_feature" "$@" 2>&1
 }
 
 source_feature() {

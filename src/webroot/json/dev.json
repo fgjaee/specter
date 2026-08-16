@@ -7,6 +7,20 @@
     "avatar": "https://github.com/dpejoh.png"
   },
   {
+    "name": "Juan Martín",
+    "username": "juanma0511",
+    "role": "Backend Contributor",
+    "github": "https://github.com/juanma0511",
+    "avatar": "https://github.com/juanma0511.png"
+  },
+  {
+    "name": "bocho",
+    "username": "bocho8",
+    "role": "WebUI & Backend Contributor",
+    "github": "https://github.com/bocho8",
+    "avatar": "https://github.com/bocho8.png"
+  },
+  {
     "name": "myzanori",
     "username": "myzanori",
     "role": "WebUI Contributor",
@@ -19,13 +33,6 @@
     "role": "Turkish Translator",
     "github": "https://github.com/mirvora",
     "avatar": "https://github.com/mirvora.png"
-  },
-  {
-    "name": "bocho",
-    "username": "bocho8",
-    "role": "WebUI & Backend Contributor",
-    "github": "https://github.com/bocho8",
-    "avatar": "https://github.com/bocho8.png"
   },
   {
     "name": "Nixie24",
@@ -47,12 +54,5 @@
     "role": "French Translator",
     "github": "https://github.com/PifGadget92",
     "avatar": "https://github.com/PifGadget92.png"
-  },
-  {
-    "name": "Juan Martín",
-    "username": "juanma0511",
-    "role": "Backend Contributor",
-    "github": "https://github.com/juanma0511",
-    "avatar": "https://github.com/juanma0511.png"
   }
 ]
