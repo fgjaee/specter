@@ -14,14 +14,12 @@ assert_eq "detect: cleveres keybox" "$CLEVERES_KEYBOX" "$KSM_KEYBOX"
 assert_eq "detect: cleveres targets" "$CLEVERES_TARGETS" "$KSM_TARGETS"
 assert_eq "detect: cleveres security" "$CLEVERES_SECURITY" "$KSM_SECURITY"
 
-# Stale data directory alone must not select a disabled/uninstalled backend.
 bootstrap
 source_libs
 mkdir -p "$CLEVERES_DIR"
 detect_keystore_manager
 assert_eq "detect: stale cleveres dir ignored" "none" "$KSM"
 
-# Cleveres wins auto-selection when multiple enabled keystore backends exist.
 bootstrap
 source_libs
 mk_module cleverestricky "CleveresTricky"
@@ -32,7 +30,6 @@ mkdir -p "$CLEVERES_DIR" "$TEESIM_DIR" "$OMK_DIR"
 detect_keystore_manager
 assert_eq "detect: cleveres priority" "cleveres" "$KSM"
 
-# Explicit override remains possible and singleton disables Cleveres when it loses.
 bootstrap
 source_libs
 mk_module cleverestricky "CleveresTricky"
@@ -44,7 +41,6 @@ assert_file_exists "singleton: explicit trickystore disables cleveres" "$CLEVERE
 detect_keystore_manager
 assert_eq "detect: explicit trickystore" "trickystore" "$KSM"
 
-# Auto singleton keeps Cleveres and disables lower-priority enabled providers.
 bootstrap
 source_libs
 mk_module cleverestricky "CleveresTricky"
@@ -68,8 +64,6 @@ assert_contains "patch: cleveres system full date" "$(cat "$CLEVERES_SECURITY")"
 assert_contains "patch: cleveres boot full date" "$(cat "$CLEVERES_SECURITY")" "boot=2026-08-05"
 assert_contains "patch: cleveres vendor full date" "$(cat "$CLEVERES_SECURITY")" "vendor=2026-08-05"
 assert_eq "patch: cleveres read" "2026-08-05" "$(ksm_get_security_patch)"
-
-# Legacy compact Cleveres patch syntax is also understood for display/migration.
 printf '20260805\n' > "$CLEVERES_SECURITY"
 assert_eq "patch: compact date read" "2026-08-05" "$(ksm_get_security_patch)"
 
@@ -92,21 +86,15 @@ printf 'com.example.one\n' > "$CLEVERES_TARGETS"
 detect_keystore_manager
 ksm_target_management_available
 assert_eq "target: targeted mode writable" "0" "$?"
-
-# Cleveres current default profile uses a regular global_mode flag file.
 touch "$CLEVERES_GLOBAL_MODE"
 ksm_target_management_available
 assert_eq "target: global mode blocks Specter writes" "1" "$?"
-
 _out=$(run_feature target.sh --set "$CLEVERES_TARGETS" 2>&1); _rc=$?
 assert_eq "target: global mode set rejected" "1" "$_rc"
 assert_contains "target: global mode message" "$_out" "Global Mode is enabled"
-
 _out=$(run_feature auto_target.sh 2>&1); _rc=$?
 assert_eq "auto target: global mode safe skip" "0" "$_rc"
 assert_contains "auto target: global mode skip logged" "$_out" "Global Mode is active"
-
-# Read-only target diagnostics stay available in Global Mode.
 _out=$(run_feature target.sh --list 2>&1); _rc=$?
 assert_eq "target: global mode list allowed" "0" "$_rc"
 assert_contains "target: global mode list content" "$_out" "com.example.one"
@@ -132,25 +120,25 @@ assert_contains "rcs safe: requires key attestation" "$(cat "$CLEVERES_TARGETS")
 assert_not_contains "rcs safe: excludes Messages" "$(cat "$CLEVERES_TARGETS")" "com.google.android.apps.messaging"
 assert_not_contains "rcs safe: excludes Google IMS" "$(cat "$CLEVERES_TARGETS")" "com.google.android.ims"
 
-# A later merge (including action.sh's normal target merge) must not undo RCS safety.
 printf '%s\n' \
   'android' \
   'com.google.android.gms' \
   'com.google.android.apps.messaging' \
   'com.google.android.ims' > "$CLEVERES_TARGETS"
 _out=$(run_feature target.sh --merge 2>&1); _rc=$?
+[ "$_rc" -eq 0 ] || printf '  DIAG  target --merge output: %s\n' "$_out"
 assert_eq "rcs safe: merge succeeds" "0" "$_rc"
 assert_contains "rcs safe: merge restores Key Attestation" "$(cat "$CLEVERES_TARGETS")" "io.github.vvb2060.keyattestation"
 assert_not_contains "rcs safe: merge prunes Messages" "$(cat "$CLEVERES_TARGETS")" "com.google.android.apps.messaging"
 assert_not_contains "rcs safe: merge prunes Google IMS" "$(cat "$CLEVERES_TARGETS")" "com.google.android.ims"
 
-# Background Auto Target also cleans a stale protected entry while retaining the core.
 printf '%s\n' \
   'android' \
   'com.google.android.gms' \
   'com.google.android.apps.messaging' \
   'com.google.android.ims' > "$CLEVERES_TARGETS"
 _out=$(run_feature auto_target.sh 2>&1); _rc=$?
+[ "$_rc" -eq 0 ] || printf '  DIAG  auto_target output: %s\n' "$_out"
 assert_eq "rcs safe: auto target succeeds" "0" "$_rc"
 assert_contains "rcs safe: auto target keeps Key Attestation" "$(cat "$CLEVERES_TARGETS")" "io.github.vvb2060.keyattestation"
 assert_not_contains "rcs safe: auto target prunes Messages" "$(cat "$CLEVERES_TARGETS")" "com.google.android.apps.messaging"
