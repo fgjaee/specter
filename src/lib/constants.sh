@@ -58,6 +58,12 @@ FIXED_TARGETS="android $GMS_APPS"
 GMS_KILL_LIST="$GMS_APPS com.google.android.gms.persistent com.google.android.gms.unstable com.google.android.rkpdapp com.android.chrome com.google.android.googlequicksearchbox"
 TOOL_APPS="bin.mt.plus bin.mt.plus.canary com.omarea.vtools moe.shizuku.privileged.api com.estrongs.android.pop com.coolapk.market com.sevtinge.hyperceiler com.coderstory.toolkit"
 
+# Proven working CleveresTricky RCS-safe scope. Messages and Google IMS must stay
+# on the genuine Keystore path; Key Attestation is intentionally inside the
+# Cleveres scope so its checks reflect the configured attestation path.
+CLEVERES_RCS_SAFE_TARGETS="android com.android.vending com.google.android.gsf com.google.android.gms com.google.android.contactkeys com.google.android.safetycore com.google.android.apps.walletnfcrel io.github.vvb2060.keyattestation"
+CLEVERES_RCS_PROTECTED_TARGETS="com.google.android.apps.messaging com.google.android.ims"
+
 # -- Decode substitution --
 STD_ALPHABET="ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/"
 SHUFFLED_ALPHABET="1dgWnocayqxU3r6vA5lCIPYfHmkV08b4tz+KMsp2NQ9LRXihODwSj7BEFJ/ZuGTe"

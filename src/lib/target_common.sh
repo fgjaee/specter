@@ -31,10 +31,14 @@ _parse_customize() {
   unset _customize _first
 }
 
-# Read TEE status, sets $teeBroken
+# Read TEE status, sets $teeBroken. Always return success: target.sh runs with
+# set -e and an absent status cache must not abort an otherwise valid merge.
 _read_tee_status() {
   teeBroken="false"
-  [ -f "$TEE_STATUS" ] && teeBroken=$(grep -E '^(teeBroken|tee_broken)=' "$TEE_STATUS" 2>/dev/null | cut -d= -f2 || echo "false")
+  if [ -f "$TEE_STATUS" ]; then
+    teeBroken=$(grep -E '^(teeBroken|tee_broken)=' "$TEE_STATUS" 2>/dev/null | cut -d= -f2 || echo "false")
+  fi
+  return 0
 }
 
 # Merge helpers — used by --merge and --merge-denylist in target.sh
@@ -108,5 +112,4 @@ _compute_suffix() {
   elif [ "$_customize_mode" = "condition_all" ]; then
     _suffix="?"
   fi
-
 }
