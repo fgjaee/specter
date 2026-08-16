@@ -23,6 +23,14 @@ FALLBACK_KEYBOXES="Yuri/8"
 : "${GMS_PROPS_FILE:=/data/system/gms_certified_props.json}"
 : "${BACKUP_DIR:=$SPECTER_DIR/backup}"
 
+# -- CleveresTricky (id=cleverestricky) --
+: "${CLEVERES_MODULE:=$MODULES_BASE/cleverestricky}"
+: "${CLEVERES_DIR:=/data/adb/cleverestricky}"
+: "${CLEVERES_KEYBOX:=$CLEVERES_DIR/keybox.xml}"
+: "${CLEVERES_TARGETS:=$CLEVERES_DIR/target.txt}"
+: "${CLEVERES_SECURITY:=$CLEVERES_DIR/security_patch.txt}"
+: "${CLEVERES_GLOBAL_MODE:=$CLEVERES_DIR/global_mode}"
+
 # -- OhMyKeymint (OMK) paths (defaults, overridable by env) --
 : "${OMK_MODULE:=$MODULES_BASE/oh_my_keymint}"
 : "${OMK_DIR:=/data/misc/keystore/omk}"
@@ -41,6 +49,12 @@ GMS_APPS="com.android.vending com.google.android.gsf com.google.android.gms com.
 FIXED_TARGETS="android $GMS_APPS"
 GMS_KILL_LIST="$GMS_APPS com.google.android.gms.persistent com.google.android.gms.unstable com.google.android.rkpdapp com.android.chrome com.google.android.googlequicksearchbox"
 TOOL_APPS="bin.mt.plus bin.mt.plus.canary com.omarea.vtools moe.shizuku.privileged.api com.estrongs.android.pop com.coolapk.market com.sevtinge.hyperceiler com.coderstory.toolkit"
+
+# Proven working CleveresTricky RCS-safe scope. Messages and Google IMS stay on
+# the genuine Android Keystore path. Key Attestation stays inside the Cleveres
+# scope so its checks exercise the configured attestation path.
+CLEVERES_RCS_SAFE_TARGETS="android com.android.vending com.google.android.gsf com.google.android.gms com.google.android.contactkeys com.google.android.safetycore com.google.android.apps.walletnfcrel io.github.vvb2060.keyattestation"
+CLEVERES_RCS_PROTECTED_TARGETS="com.google.android.apps.messaging com.google.android.ims"
 
 # -- Decode substitution --
 STD_ALPHABET="ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/"
