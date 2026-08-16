@@ -1,0 +1,116 @@
+name: Sync Upstream Specter
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '17 */6 * * *'
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: sync-upstream-specter
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out fork
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Fetch and merge upstream
+        id: upstream
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          git remote remove upstream 2>/dev/null || true
+          git remote add upstream https://github.com/dpejoh/specter.git
+          git fetch --no-tags upstream main
+          git fetch --no-tags origin main
+          git checkout -B main origin/main
+
+          UPSTREAM_SHA=$(git rev-parse upstream/main)
+          echo "upstream_sha=$UPSTREAM_SHA" >> "$GITHUB_OUTPUT"
+
+          if git merge-base --is-ancestor upstream/main HEAD; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            echo "Fork already contains upstream main."
+            exit 0
+          fi
+
+          if ! git merge --no-edit upstream/main; then
+            echo "::error::Upstream merge has conflicts. Nothing was pushed."
+            echo "Conflicted files:"
+            git diff --name-only --diff-filter=U || true
+            git merge --abort || true
+            exit 1
+          fi
+
+          echo "changed=true" >> "$GITHUB_OUTPUT"
+          echo "Merged upstream $UPSTREAM_SHA locally; validating before push."
+
+      - name: Setup Node
+        if: steps.upstream.outputs.changed == 'true'
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        if: steps.upstream.outputs.changed == 'true'
+        run: npm ci
+
+      - name: Type check
+        if: steps.upstream.outputs.changed == 'true'
+        run: npx tsc --noEmit
+
+      - name: Lint shell scripts
+        if: steps.upstream.outputs.changed == 'true'
+        uses: ludeeus/action-shellcheck@2.0.0
+        with:
+          scandir: src
+          severity: warning
+
+      - name: Run shell tests
+        if: steps.upstream.outputs.changed == 'true'
+        run: bash tests/run.sh
+
+      - name: Run TS tests
+        if: steps.upstream.outputs.changed == 'true'
+        run: npm test
+
+      - name: Build module
+        if: steps.upstream.outputs.changed == 'true'
+        run: npm run build
+
+      - name: Verify module structure
+        if: steps.upstream.outputs.changed == 'true'
+        run: |
+          test -f Module/module.prop
+          test -f Module/META-INF/com/google/android/updater-script
+          test -f Module/webroot/index.html
+          test -f Module/lib/common.sh
+          test -f Module/lib/constants.sh
+          test -f Module/webroot/json/module_paths.json
+
+      - name: Push validated sync to main
+        if: steps.upstream.outputs.changed == 'true'
+        run: |
+          set -euo pipefail
+          git push origin HEAD:main
+
+      - name: Upload synced CI module
+        if: steps.upstream.outputs.changed == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: Specter-upstream-sync-${{ steps.upstream.outputs.upstream_sha }}
+          path: Module/
+          retention-days: 28

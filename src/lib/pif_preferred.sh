@@ -9,6 +9,22 @@ pif_bot_mirror_urls() {
     "https://gh.sevencdn.com/https://raw.githubusercontent.com/KOWX712/PlayIntegrityFix/$1"
 }
 
+
+# Vagelis1608/get_the_canary_miner keeps current Pixel Canary props in
+# devices/<codename>.pif.prop. KOWX's selector may not list newer Pixels yet,
+# so this is a live fallback source rather than a frozen imported prop.
+# $1 = KOWX product (e.g. rango_beta)
+pif_canary_miner_urls() {
+  _pcm_product="$1"
+  _pcm_device="${_pcm_product%_beta}"
+  [ -n "$_pcm_device" ] || { unset _pcm_product _pcm_device; return 1; }
+  printf '%s\n' \
+    "https://raw.githubusercontent.com/Vagelis1608/get_the_canary_miner/main/devices/${_pcm_device}.pif.prop" \
+    "https://fastly.jsdelivr.net/gh/Vagelis1608/get_the_canary_miner@main/devices/${_pcm_device}.pif.prop" \
+    "https://gh.sevencdn.com/https://raw.githubusercontent.com/Vagelis1608/get_the_canary_miner/main/devices/${_pcm_device}.pif.prop"
+  unset _pcm_product _pcm_device
+}
+
 pif_prop_get() {
   [ -f "$1" ] && [ -n "$2" ] || return 1
   sed -n "s/^$2=//p" "$1" 2>/dev/null | head -1
@@ -93,6 +109,49 @@ pif_merge_spoof_keys() {
   unset _pmsk_line _pmsk_k
 }
 
+
+# Convert a rich PIFork-style prop (or a normal KOWX bot prop) into the
+# minimal format expected by PIF [INJECT]. This deliberately ignores source
+# Advanced Settings so the user's existing spoof* / DEBUG choices survive.
+# $1 = source prop, $2 = destination prop
+pif_write_inject_prop() {
+  _pwip_src="$1"
+  _pwip_dst="$2"
+  [ -f "$_pwip_src" ] && [ -n "$_pwip_dst" ] || { unset _pwip_src _pwip_dst; return 1; }
+
+  _pwip_fp=$(pif_prop_get "$_pwip_src" FINGERPRINT)
+  _pwip_model=$(pif_prop_get "$_pwip_src" MODEL)
+  _pwip_manufacturer=$(pif_prop_get "$_pwip_src" MANUFACTURER)
+  _pwip_patch=$(pif_prop_get "$_pwip_src" SECURITY_PATCH)
+
+  [ -n "$_pwip_fp" ] && [ -n "$_pwip_model" ] || {
+    unset _pwip_src _pwip_dst _pwip_fp _pwip_model _pwip_manufacturer _pwip_patch
+    return 1
+  }
+  [ -n "$_pwip_manufacturer" ] || _pwip_manufacturer="Google"
+
+  _pwip_out=$(mktemp 2>/dev/null || echo "/data/local/tmp/.specter_pif_normalized_${$}")
+  {
+    printf 'FINGERPRINT=%s\n' "$_pwip_fp"
+    printf 'MANUFACTURER=%s\n' "$_pwip_manufacturer"
+    printf 'MODEL=%s\n' "$_pwip_model"
+    [ -n "$_pwip_patch" ] && printf 'SECURITY_PATCH=%s\n' "$_pwip_patch"
+  } > "$_pwip_out" || {
+    rm -f "$_pwip_out"
+    unset _pwip_src _pwip_dst _pwip_fp _pwip_model _pwip_manufacturer _pwip_patch _pwip_out
+    return 1
+  }
+
+  cp "$_pwip_out" "$_pwip_dst" || {
+    rm -f "$_pwip_out"
+    unset _pwip_src _pwip_dst _pwip_fp _pwip_model _pwip_manufacturer _pwip_patch _pwip_out
+    return 1
+  }
+  rm -f "$_pwip_out"
+  unset _pwip_src _pwip_dst _pwip_fp _pwip_model _pwip_manufacturer _pwip_patch _pwip_out
+  return 0
+}
+
 # $1 = product (e.g. oriole_beta), $2 = destination path
 pif_apply_github_prop() {
   _pag_product="$1"
@@ -101,6 +160,8 @@ pif_apply_github_prop() {
   _pag_tmp=$(mktemp 2>/dev/null || echo "/data/local/tmp/.specter_pif_${$}")
   _pag_old=$(mktemp 2>/dev/null || echo "/data/local/tmp/.specter_pif_old_${$}")
   [ -f "$_pag_dst" ] && cp "$_pag_dst" "$_pag_old" || : > "$_pag_old"
+
+  # Primary source: KOWX bot props (existing Specter behavior).
   while IFS= read -r _pag_url || [ -n "$_pag_url" ]; do
     [ -n "$_pag_url" ] || continue
     if download "$_pag_url" "$_pag_tmp" 2>/dev/null && pif_prop_valid "$_pag_tmp"; then
@@ -113,10 +174,31 @@ pif_apply_github_prop() {
   done <<EOF
 $(pif_bot_mirror_urls "bot/device_prop/${_pag_product}.prop")
 EOF
+
+  # Newer Pixel products can exist in Canary Miner before KOWX lists them.
+  # Fetch the live codename prop so expiry rotations continue automatically.
+  log_i "PIF" "KOWX prop unavailable for $_pag_product; trying Canary Miner"
+  while IFS= read -r _pag_url || [ -n "$_pag_url" ]; do
+    [ -n "$_pag_url" ] || continue
+    if download "$_pag_url" "$_pag_tmp" 2>/dev/null && pif_prop_valid "$_pag_tmp"; then
+      if pif_write_inject_prop "$_pag_tmp" "$_pag_dst"; then
+        pif_merge_spoof_keys "$_pag_old" "$_pag_dst"
+        _pag_model=$(pif_prop_get "$_pag_dst" MODEL)
+        log_i "PIF" "Fetched Canary Miner prop: ${_pag_model:-$_pag_product}"
+        rm -f "$_pag_tmp" "$_pag_old"
+        unset _pag_product _pag_dst _pag_tmp _pag_old _pag_url _pag_model
+        return 0
+      fi
+    fi
+  done <<EOF
+$(pif_canary_miner_urls "$_pag_product")
+EOF
+
   rm -f "$_pag_tmp" "$_pag_old"
-  unset _pag_product _pag_dst _pag_tmp _pag_old _pag_url
+  unset _pag_product _pag_dst _pag_tmp _pag_old _pag_url _pag_model
   return 1
 }
+
 
 # $1 = module name (from module.prop name=)
 # 0 = applied, 1 = soft-fail (caller may random), 2 = Canary needs network

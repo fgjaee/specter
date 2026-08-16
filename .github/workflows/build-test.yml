@@ -61,7 +61,7 @@ jobs:
       - name: Check no su -c in features
         run: |
           ! grep -rn "su -c" Module/features/ --include="*.sh" | grep -v "hma.sh"
-          
+
       - name: Get module version
         id: get_name
         run: |
@@ -75,8 +75,11 @@ jobs:
           path: Module/
           retention-days: 28
 
+      # Upstream has private Telegram secrets. Keep its delivery behavior when
+      # running in the upstream repository, but do not make fork CI depend on
+      # secrets that are intentionally absent here.
       - name: Send CI build to Telegram
-        if: github.event_name != 'pull_request'
+        if: github.repository == 'dpejoh/specter' && github.event_name != 'pull_request'
         run: |
           COMMIT_MSG=$(git log -1 --pretty=%s | sed 's/`/'"'"'/g')
           COMMIT_URL="https://github.com/${{ github.repository }}/commit/${{ github.sha }}"
