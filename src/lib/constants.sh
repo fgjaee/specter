@@ -11,6 +11,7 @@ FALLBACK_KEYBOXES="Yuri/8"
 # -- Paths (defaults, overridable by env) --
 : "${MODULES_BASE:=/data/adb/modules}"
 : "${SPECTER_DIR:=/data/adb/specter}"
+: "${CONFIG_DIR:=$SPECTER_DIR/config}"
 : "${TRICKY_DIR:=/data/adb/tricky_store}"
 : "${PIF_DIR:=$MODULES_BASE/playintegrityfix}"
 : "${ZYNEXT_DIR:=$MODULES_BASE/zygisksu}"

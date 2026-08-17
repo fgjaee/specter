@@ -185,6 +185,8 @@ ksm_set_security_patch "2026-06-05"
 assert_contains "patch toml: set" "$(cat "$KSM_CONFIG")" 'security_patch = "2026-06-05"'
 assert_eq "patch get toml" "2026-06-05" "$(ksm_get_security_patch)"
 assert_file_not_exists "patch toml: no restart" "$OMK_RESTART_DIR/restart.keymint"
+ksm_set_trust_field os_version auto
+assert_contains "trust field: auto quoted" "$(cat "$KSM_CONFIG")" 'os_version = "auto"'
 
 # ---------- first boot: apply when unset vs preserve when set ----------
 bootstrap

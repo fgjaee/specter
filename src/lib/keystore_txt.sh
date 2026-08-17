@@ -102,6 +102,8 @@ _ksm_wait_file() {
     _kwf_i=$((_kwf_i + 1))
   done
   [ -f "$_kwf_file" ]
+  _kwf_rc=$?
   unset _kwf_file _kwf_tries _kwf_i
+  return $_kwf_rc
 }
 

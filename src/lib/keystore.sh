@@ -377,15 +377,26 @@ ksm_set_trust_field() {
       }
       case "$_kst_key" in
         os_version)
-          _toml_set_trust_key "$KSM_CONFIG" "os_version" "$_kst_val"
+          case "$_kst_val" in auto) _kst_val='"auto"' ;; esac
+          _toml_set_trust_key "$KSM_CONFIG" "os_version" "$_kst_val" || {
+            unset _kst_key _kst_val
+            return 1
+          }
           ;;
         vb_key|vb_hash)
-          _toml_set_trust_key "$KSM_CONFIG" "$_kst_key" "\"$_kst_val\""
+          _toml_set_trust_key "$KSM_CONFIG" "$_kst_key" "\"$_kst_val\"" || {
+            unset _kst_key _kst_val
+            return 1
+          }
+          ;;
+        *)
+          unset _kst_key _kst_val
+          return 1
           ;;
       esac
       ksm_reload
       ;;
-    *) return 1 ;;
+    *) unset _kst_key _kst_val; return 1 ;;
   esac
   unset _kst_key _kst_val
 }

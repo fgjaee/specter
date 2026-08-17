@@ -23,8 +23,6 @@ fi
 . "$_root/lib/keystore.sh"
 . "$_root/lib/conflicts.sh"
 
-: "${CONFIG_DIR:="$SPECTER_DIR/config"}"
-
 [ "$(cfg_get dev_mode false 2>/dev/null)" = "true" ] && export SPECTER_LOG_LEVEL=debug
 
 unset _root

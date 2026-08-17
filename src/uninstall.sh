@@ -69,7 +69,7 @@ fi
 # Clean up scheduler task data
 rm -rf "$SPECTER_DIR/scheduler_tasks" 2>/dev/null
 rm -f "$SPECTER_DIR/.inotify_handler.sh" 2>/dev/null
-rm -f "$SPECTER_DIR/auto_known_packages.txt" 2>/dev/null
+rm -f "$SPECTER_DIR/auto_known_packages.txt" "$SPECTER_DIR/auto_scan_tmp.txt" "$SPECTER_DIR"/.auto_target_* 2>/dev/null
 
 # Clean up legacy loop PID files
 for _pid_key in loop_prop_handler.pid loop_keybox_info.pid auto_target.pid; do
