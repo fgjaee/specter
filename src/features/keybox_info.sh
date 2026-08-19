@@ -94,7 +94,9 @@ if [ -f "$KEYBOX_FILE" ]; then
   fi
 fi
 
-cat <<EOF > "$INFO_PATH"
+if [ "$_installed" != "true" ] || [ -n "$_source" ] || [ ! -f "$INFO_PATH" ] ||
+   { [ -n "$_serial" ] && ! grep -q '"serial": "'"'$_serial'"'"' "$INFO_PATH" 2>/dev/null; }; then
+  cat <<EOF > "$INFO_PATH"
 {
   "installed": $_installed,
   "source": "$(_escape_json "$_source")",
@@ -107,6 +109,7 @@ cat <<EOF > "$INFO_PATH"
   "is_private": $_is_private_val
 }
 EOF
+fi
 
 if [ "$_installed" = "true" ]; then
   if [ "$_revoked" = "true" ]; then
