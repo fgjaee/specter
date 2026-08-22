@@ -95,17 +95,12 @@ assert_contains "rcs safe: merge restores Key Attestation" "$_target" "io.github
 assert_not_contains "rcs safe: merge prunes Messages" "$_target" "com.google.android.apps.messaging"
 assert_not_contains "rcs safe: merge prunes Google IMS" "$_target" "com.google.android.ims"
 
-printf '%s\n' \
-  'android' \
-  'com.google.android.gms' \
-  'com.google.android.apps.messaging' \
-  'com.google.android.ims' > "$CLEVERES_TARGETS"
+# Cleveres owns application scope itself. Background Auto Target must not bulk
+# add every newly installed app or rewrite a profile-managed target list.
+printf '%s\n' 'com.example.keep' > "$CLEVERES_TARGETS"
 _out=$(run_feature auto_target.sh 2>&1); _rc=$?
-assert_eq "rcs safe: auto target succeeds" "0" "$_rc"
-_target=$(cat "$CLEVERES_TARGETS")
-assert_contains "rcs safe: auto target keeps Key Attestation" "$_target" "io.github.vvb2060.keyattestation"
-assert_not_contains "rcs safe: auto target prunes Messages" "$_target" "com.google.android.apps.messaging"
-assert_not_contains "rcs safe: auto target prunes Google IMS" "$_target" "com.google.android.ims"
+assert_eq "cleveres ownership: auto target exits cleanly" "0" "$_rc"
+assert_file_eq "cleveres ownership: auto target leaves scope untouched" "$CLEVERES_TARGETS" "com.example.keep"
 
 unset _input _out _rc _target
 cleanup
