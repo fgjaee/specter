@@ -40,6 +40,15 @@ _conflict_toggle_key() {
 _feature_should_run() {
   _fsr_feature="$1" _fsr_default="${2:-1}"
   [ "$(cfg_get "$(_conflict_toggle_key "$_fsr_feature")" "$_fsr_default")" != "0" ] || return 1
+
+  # CleveresTricky owns its own application scope/profiles. The generic Specter
+  # target feature bulk-adds third-party apps and is therefore the wrong owner
+  # for Cleveres. Direct App Targeting / profile controls remain available.
+  if [ "$_fsr_feature" = "target" ] && module_enabled "${CLEVERES_MODULE##*/}" >/dev/null && [ -d "$CLEVERES_DIR" ]; then
+    log_d "CONFLICT" "CleveresTricky owns application scope; skipping generic target/auto-target"
+    return 1
+  fi
+
   if _conflict_claimed "$_fsr_feature"; then
     log_d "CONFLICT" "$_fsr_feature claimed by another module, skipping"
     return 1
