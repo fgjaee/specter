@@ -65,6 +65,14 @@ ksm_read_targets_raw > "$_STAGING" 2>/dev/null || : > "$_STAGING"
 _ADDS="$SPECTER_DIR/.auto_target_adds.$$"
 : > "$_ADDS"
 
+if [ "$_CLEVERES_RCS_SAFE" = "1" ]; then
+  for _required in $CLEVERES_RCS_SAFE_TARGETS; do
+    grep -Fxq "$_required" "$_EXISTING" 2>/dev/null && continue
+    printf '%s\n' "$_required" >> "$_ADDS"
+  done
+  unset _required
+fi
+
 if [ -n "$_new_pkgs" ]; then
   _suffix=""
   if [ "$KSM_PER_APP_MODES" = "1" ]; then
