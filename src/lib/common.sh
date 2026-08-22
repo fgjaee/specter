@@ -21,6 +21,12 @@ fi
 . "$_root/lib/keystore_toml.sh"
 . "$_root/lib/keystore_txt.sh"
 . "$_root/lib/keystore.sh"
+
+# conflicts.sh resolves CONFLICT_LIST when it is sourced. Keep these defaults
+# explicit here so a future constants/source-order refactor can never turn the
+# runtime path into /conflicts.txt again.
+: "${SPECTER_DIR:=/data/adb/specter}"
+: "${CONFIG_DIR:=$SPECTER_DIR/config}"
 . "$_root/lib/conflicts.sh"
 
 [ "$(cfg_get dev_mode false 2>/dev/null)" = "true" ] && export SPECTER_LOG_LEVEL=debug
