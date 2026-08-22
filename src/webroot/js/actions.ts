@@ -107,6 +107,10 @@ export function wireActions() {
       spinner?.classList.remove('hidden');
       try {
         await runAction(scriptName);
+        if (scriptName === 'restore_defaults.sh') {
+          const { refreshControlToggles } = await import('./toggles.js');
+          await refreshControlToggles();
+        }
       } catch { console.warn('Action error:'); }
       finally {
         (el as HTMLButtonElement).disabled = false;

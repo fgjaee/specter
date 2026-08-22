@@ -1,6 +1,7 @@
 import { cfgGet, cfgSet } from './cfg.js';
 import { showToast } from './toast.js';
 import { getTranslation } from './i18n.js';
+import { wireRowDialog } from './toggles.js';
 
 const t = (key: string, fallback: string): string => getTranslation(key) || fallback;
 
@@ -10,7 +11,7 @@ export function openGmsDialog() {
   cfgGet('toggle_action_gms', '1').then(parent => {
     const enabled = parent !== '0';
     cfgGet('toggle_action_gms_force_stop', '1').then(forceStop => {
-      cfgGet('toggle_action_gms_clear_data', '1').then(clearData => {
+      cfgGet('toggle_action_gms_clear_data', '0').then(clearData => {
         const banner = enabled ? '' : `<div style="display:flex;align-items:center;gap:8px;padding:12px 16px;background:var(--md-sys-color-surface-variant);border-radius:12px;margin:0 0 12px 0;color:var(--md-sys-color-on-surface-variant);font-size:0.875rem;"><md-icon>info</md-icon><span>${t('feature_disabled_desc', 'Feature is disabled, enable it in Control to configure')}</span></div>`;
         dialog.innerHTML = `
         <div slot="headline">
@@ -81,10 +82,5 @@ export function openGmsDialog() {
 }
 
 export function wireGms() {
-  const row = document.getElementById('toggle-action_gms-row');
-  if (!row) return;
-  const content = row.querySelector('.list-item-content') as HTMLElement | null;
-  if (!content) return;
-  content.style.cursor = 'pointer';
-  content.addEventListener('click', openGmsDialog);
+  wireRowDialog('toggle-action_gms-row', openGmsDialog);
 }

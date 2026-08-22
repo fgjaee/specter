@@ -199,6 +199,8 @@
   "settings_appearance": "Görünüm",
   "settings_color_preset": "Renk",
   "settings_contributors": "Katkıda Bulunanlar",
+  "settings_reset_defaults": "Varsayılan seçenekleri sıfırla",
+  "settings_reset_defaults_desc": "Control ve özellik anahtarlarını fabrika varsayılanlarına döndürür. Dil ve görünüm değişmez.",
   "settings_dev_mode": "Geliştirici Modu",
   "settings_dev_mode_desc": "Düz betik ve terminal çıktılarını göster",
   "settings_language": "Dil",

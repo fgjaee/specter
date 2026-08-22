@@ -2,6 +2,7 @@ import '@material/web/button/filled-button.js';
 import { cfgGet, cfgSet } from './cfg.js';
 import { showToast } from './toast.js';
 import { getTranslation } from './i18n.js';
+import { wireRowDialog } from './toggles.js';
 
 const t = (key: string, fallback: string): string => getTranslation(key) || fallback;
 
@@ -68,10 +69,5 @@ export function openAutokeyboxDialog() {
 }
 
 export function wireAutokeybox() {
-  const row = document.getElementById('toggle-background_autokeybox-row');
-  if (!row) return;
-  const content = row.querySelector('.list-item-content') as HTMLElement | null;
-  if (!content) return;
-  content.style.cursor = 'pointer';
-  content.addEventListener('click', openAutokeyboxDialog);
+  wireRowDialog('toggle-background_autokeybox-row', openAutokeyboxDialog);
 }

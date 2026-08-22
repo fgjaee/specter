@@ -57,6 +57,13 @@ export function renderControlToggles() {
 
     row.appendChild(iconDiv);
     row.appendChild(content);
+    if (toggle.configurable) {
+      const cue = document.createElement('md-icon');
+      cue.className = 'li-config-icon';
+      cue.setAttribute('aria-hidden', 'true');
+      cue.textContent = 'settings';
+      row.appendChild(cue);
+    }
     row.appendChild(spacer);
     row.appendChild(sw);
     row.appendChild(ripple);
@@ -64,6 +71,15 @@ export function renderControlToggles() {
   }
 
   wireControlToggles();
+}
+
+export function wireRowDialog(rowId: string, open: () => void) {
+  const row = document.getElementById(rowId);
+  if (!row) return;
+  row.addEventListener('click', e => {
+    if (e.composedPath().some(n => n instanceof Element && n.localName === 'md-switch')) return;
+    open();
+  });
 }
 
 export function wireControlToggles() {

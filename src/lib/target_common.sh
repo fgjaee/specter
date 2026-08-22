@@ -48,6 +48,7 @@ _merge_cleanup() {
     _txt_insert_default "$_TMP_TARGET" "$_TMP_ADD"
     ksm_commit_targets "$_TMP_TARGET"
   fi
+  rm -f "$_TMP_EXIST" "$_TMP_ADD"
   unset _TMP_EXIST _TMP_TARGET _TMP_ADD
 }
 
