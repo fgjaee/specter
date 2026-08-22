@@ -17,7 +17,21 @@ _feature_should_run "target" || { log_d "AUTO_TARGET" "target disabled or claime
 log_i "AUTO_TARGET" "Scanning for new packages"
 
 ksm_available || { log_d "AUTO_TARGET" "no keystore manager, skipping"; exit 0; }
+ksm_target_management_available || { log_i "AUTO_TARGET" "CleveresTricky Global Mode active; targeted app list is inactive, skipping"; exit 0; }
 [ -f "$KSM_TARGETS" ] || { log_w "AUTO_TARGET" "target list missing, skipping"; exit 0; }
+
+_CLEVERES_RCS_SAFE=0
+if [ "$KSM" = "cleveres" ] && { [ -f "$SPECTER_DIR/rcs_safe_mode" ] || [ -f "$SPECTER_DIR/backup/cleveres_rcs/active" ]; }; then
+  _CLEVERES_RCS_SAFE=1
+fi
+
+_is_rcs_protected() {
+  [ "$_CLEVERES_RCS_SAFE" = "1" ] || return 1
+  case " $CLEVERES_RCS_PROTECTED_TARGETS " in
+    *" $1 "*) return 0 ;;
+  esac
+  return 1
+}
 
 pkgs=$(pm list packages -3 2>/dev/null) || { log_e "AUTO_TARGET" "pm list packages failed"; exit 1; }
 echo "$pkgs" | cut -d ":" -f 2 | sort -u > "$TEMP_LIST"
@@ -34,7 +48,8 @@ _known=""
 _new_pkgs=""
 while IFS= read -r _pkg; do
   [ -z "$_pkg" ] && continue
-    if ! echo "$_known" | grep -Fxq "$_pkg" 2>/dev/null && ! grep -Fxq "$_pkg" "$_EXISTING" 2>/dev/null; then
+  _is_rcs_protected "$_pkg" && continue
+  if ! echo "$_known" | grep -Fxq "$_pkg" 2>/dev/null && ! grep -Fxq "$_pkg" "$_EXISTING" 2>/dev/null; then
     if [ -f "$BLACKLIST_ENABLED" ] && [ -s "$BLACKLIST" ]; then
       if grep -Fxq "$_pkg" "$BLACKLIST" 2>/dev/null; then
         continue
@@ -86,6 +101,11 @@ while IFS= read -r _line || [ -n "$_line" ]; do
   case "$_line" in \[*\]) echo "$_line" >> "$_TMP_CLEAN"; continue ;; esac
   _base="$_line"
   case "$_base" in *\!) _base=${_base%!} ;; *\?) _base=${_base%\?} ;; esac
+  if _is_rcs_protected "$_base"; then
+    _cleaned=$((_cleaned + 1))
+    log_i "AUTO_TARGET" "RCS Safe Mode: excluding $_base"
+    continue
+  fi
   # Skip duplicate bases (overlapping scans can re-append the same pkgs).
   if grep -Fxq "$_base" "$_SEEN" 2>/dev/null; then
     _cleaned=$((_cleaned + 1))
