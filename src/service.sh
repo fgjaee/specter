@@ -45,25 +45,7 @@ for _pair in rom_fingerprint_hexpatch:toggle_rom_fingerprint_names \
 done
 unset _pair _old _new
 
-# Seed default configs before running any features
-for _tk_pair in toggle_prop_handler:1 toggle_boot_state_props:1 toggle_bootmode_spoof:1 \
-                toggle_adb_disabler:0 \
-                toggle_adb_disabler_dev_options:1 toggle_adb_disabler_usb_debug:1 \
-                toggle_adb_disabler_oem_unlock:1 \
-                toggle_rom_fingerprint:1 toggle_custom_rom_props:1 toggle_pif_props:1 \
-                rom_fingerprint_pif:1 \
-                toggle_rom_fingerprint_names:1 toggle_rom_fingerprint_prefix:1 \
-                toggle_rom_fingerprint_build_type:1 \
-                toggle_action_gms:1 toggle_action_target:1 \
-                toggle_action_security_patch:0 toggle_action_pif:1 toggle_action_keybox:1 \
-                toggle_action_security_patch_device:1 toggle_action_security_patch_bulletin:1 \
-                toggle_action_security_patch_synthetic:1 \
-                toggle_action_gms_force_stop:1 toggle_action_gms_clear_data:1 \
-                toggle_auto_target:1 toggle_keybox_info:1 toggle_autopif:0 toggle_autokeybox:0; do
-  _key="${_tk_pair%%:*}"
-  _def="${_tk_pair#*:}"
-  [ -f "$CONFIG_DIR/val/$_key.val" ] || cfg_set "$_key" "$_def"
-done
+_apply_toggle_defaults
 
 for _bf in adb_disabler rom_fingerprint pif_props crom_props; do
   case "$_bf" in *[!a-zA-Z0-9_-]*) log_w "SERVICE" "Skipping invalid feature: $_bf"; continue ;; esac

@@ -192,6 +192,25 @@ ksm_read_targets_raw() {
   esac
 }
 
+ksm_lock_targets() {
+  mkdir -p "$SPECTER_DIR/.lock" || return 1
+  _klt="$SPECTER_DIR/.lock/targets"
+  _klt_n=0
+  while ! ln -s "$$" "$_klt" 2>/dev/null; do
+    _klt_pid=$(readlink "$_klt" 2>/dev/null || true)
+    if [ -n "$_klt_pid" ] && [ -d "/proc/$_klt_pid" ]; then
+      _klt_n=$((_klt_n + 1))
+      [ "$_klt_n" -ge 15 ] && {
+        log_w "KSM" "timed out waiting for target lock (pid $_klt_pid)"
+        return 1
+      }
+      sleep 1
+      continue
+    fi
+    rm -rf "$_klt"
+  done
+}
+
 ksm_commit_targets() {
   _kct_src="$1"
   case "$KSM_FORMAT" in

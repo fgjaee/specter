@@ -1,6 +1,7 @@
 import { cfgGet, cfgSet } from './cfg.js';
 import { showToast } from './toast.js';
 import { getTranslation } from './i18n.js';
+import { wireRowDialog } from './toggles.js';
 
 const t = (key: string, fallback: string): string => getTranslation(key) || fallback;
 
@@ -97,10 +98,5 @@ export function openAdbDisablerDialog() {
 }
 
 export function wireAdbDisabler() {
-  const row = document.getElementById('toggle-adb_disabler-row');
-  if (!row) return;
-  const content = row.querySelector('.list-item-content') as HTMLElement | null;
-  if (!content) return;
-  content.style.cursor = 'pointer';
-  content.addEventListener('click', openAdbDisablerDialog);
+  wireRowDialog('toggle-adb_disabler-row', openAdbDisablerDialog);
 }

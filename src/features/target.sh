@@ -69,6 +69,11 @@ case "${1:-}" in
     ksm_read_targets_raw | grep -v '^[[:space:]]*\[' || true
     exit 0
     ;;
+esac
+
+ksm_lock_targets || die "Failed to lock target list"
+
+case "${1:-}" in
   --set)
     [ -n "${2:-}" ] && [ -f "$2" ] || die "target.sh --set requires an existing file argument"
     _prune_rcs_protected_file "$2"

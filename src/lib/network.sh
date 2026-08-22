@@ -7,7 +7,7 @@ download() {
     log_d "NET" "Downloading $_dl_url"
 
     if [ -z "$_dl_output" ]; then
-        _dl_tmp=$(mktemp 2>/dev/null || echo "/data/local/tmp/.specter_dl_${$}_$(date +%s)")
+        _dl_tmp=$(mktemp 2>/dev/null || echo "/data/local/tmp/.specter_dl_${$}_$(date +%s 2>/dev/null || busybox date +%s)")
         _dl_output="$_dl_tmp"
     fi
 
@@ -39,7 +39,7 @@ download() {
     fi
 
     if [ -n "$_dl_tmp" ]; then
-        [ "$_dl_code" -eq 0 ] && cat "$_dl_tmp"
+        [ "$_dl_code" -eq 0 ] && { cat "$_dl_tmp" 2>/dev/null || busybox cat "$_dl_tmp"; }
         rm -f "$_dl_tmp"
     fi
 

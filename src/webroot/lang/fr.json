@@ -205,6 +205,8 @@
   "settings_appearance": "Apparence",
   "settings_color_preset": "Couleur",
   "settings_contributors": "Contributeurs au projet",
+  "settings_reset_defaults": "Réinitialiser les options par défaut",
+  "settings_reset_defaults_desc": "Restaure les interrupteurs Control et les fonctions aux valeurs d'usine. La langue et l'apparence sont conservées.",
   "settings_dev_mode": "Mode Développeur",
   "settings_dev_mode_desc": "Affiche les noms bruts des scripts et la sortie complète du terminal",
   "settings_language": "Langue",
